@@ -2,6 +2,8 @@
 # vim: ai ts=4 sts=4 et sw=4
 
 
+import re, time
+
 # arch: pacman -S python-pyserial
 # debian: apt-get install pyserial
 import serial
@@ -30,6 +32,9 @@ class GsmModem(object):
         # TODO: if one already exists, close it and kill it   
         self.device = serial.Serial(self.port, self.baud, timeout=self.device_timeout)
         
+        self.command("AT")
+        return True
+        
         # set some sensible defaults, to make
         # the various modems more consistant
         self.command("ATE0")      # echo off
@@ -42,20 +47,51 @@ class GsmModem(object):
         self.device.write(str)
     
     
-    def _read(self, terminator=None):
+    def _read(self, read_term=None):
         """Read from the modem (blocking) until _terminator_ is hit,
-           (defaults to \n\r, which reads a single "line"), and return."""
-        pass
+           (defaults to \r\n, which reads a single "line"), and return."""
+        buffer = []
+        
+        if not read_term:
+            read_term = "\r\n"
+        
+        while(True):
+            buf = self.device.read()
+            print "READ: %r" % buf
+            buffer.append(buf)
+            
+            if(buffer[-len(read_term)::]==list(read_term)):
+                buf_str = "".join(buffer).strip()
+                print "_Read: %r" % buf_str
+                return buf_str
     
     
-    def wait(self):
-        pass
+    def wait(self, read_term=None):
+        print "Waiting for response"
+        buffer = []
+        
+        while(True):
+            buf = self._read(read_term)
+            buffer.append(buf)
+            
+            if(buf=="OK"):
+                return buffer
     
     
     def command(self, cmd, read_term=None, write_term="\r"):
+        print "Command: %r" % cmd
+        
+        # TODO: lock the modem
         self._write(cmd + write_term)
-        return self._read()
-    
+        out = self.wait()
+
+        # rest up for a bit (modems are
+        # slow, and get confused easily)
+        time.sleep(self.cmd_delay)
+        
+        print "Output: %s" % out
+        return out
+	
     
     def receive(self, callback):
         pass
