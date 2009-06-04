@@ -5,14 +5,15 @@
 from pygsm import GsmModem
 
 
-class ReverseApp:
-    def __init__(modem):
+class ReverseApp(object):
+    def __init__(self, modem):
         modem.receive(self.incoming)
         self.modem = modem
 
-    def incoming(caller, datetime, message):
+    def incoming(self, caller, datetime, message):
         self.modem.send(caller, "Thanks for that message")
 
 
 gsm = GsmModem("/dev/ttyUSB0")
+gsm.boot()
 ReverseApp(gsm)
