@@ -55,6 +55,8 @@ class GsmModem(object):
     
     
     def _write(self, str):
+        """Write a string to the modem."""
+        print "WRITE: %r" % str
         self.device.write(str)
     
     
@@ -102,7 +104,22 @@ class GsmModem(object):
         
         print "Output: %s" % out
         return out
-	
+    
+    
+    def query(self, cmd):
+	    print "Query: %r" % cmd
+	    out = self.command(cmd)
+	    
+	    # the only valid response to a "query" is a
+	    # single line followed by "OK". if all looks
+	    # well, return just the single line
+	    if(len(out) == 2) and (out[-1] == "OK"):
+	        return out[0]
+	    
+	    # something went wrong, so return the very
+	    # ambiguous None. it's better than blowing up
+	    return None
+    
     
     def receive(self, callback):
         pass
