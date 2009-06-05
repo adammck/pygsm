@@ -20,23 +20,34 @@ class GsmModem(object):
     reset_on_failure = True
     
     
-    def __init__(self, port):
-        self.port = port
+    def __init__(self, port_or_device):
+        
+        # accept an existing serial port object,
+        # for modems which require non-default
+        # parameters or init strings (rather than
+        # wrapping all those calls opaquely here)
+        if isinstance(port_or_device, serial.Serial):
+            self.device = port_or_device
+        
+        # otherwise, assume that the single argument
+        # is a string containing the serial port that
+        # we should connect to
+        else:
+            self.port = port
     
     
     def boot(self):
         """Initializes the modem. Must be called after init, but
            before doing anything that expects the modem to be ready."""
         
-        # initialize the conection to the modem
-        # TODO: if one already exists, close it and kill it   
-        self.device = serial.Serial(self.port, self.baud, timeout=self.device_timeout)
-        
-        self.command("AT")
-        return True
+        # create the conection to the modem,
+        # if it hasn't already been done
+        if not self.device:
+            self.device = serial.Serial(self.port)
         
         # set some sensible defaults, to make
         # the various modems more consistant
+        self.command("AT+CFUN=1") # reset the modem
         self.command("ATE0")      # echo off
         self.command("AT+CMEE=1") # useful error messages
         self.command("AT+WIND=0") # disable notifications

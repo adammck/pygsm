@@ -3,6 +3,7 @@
 
 
 from pygsm import GsmModem
+import serial
 
 
 class ReverseApp(object):
@@ -14,6 +15,8 @@ class ReverseApp(object):
         self.modem.send(caller, "Thanks for that message")
 
 
-gsm = GsmModem("/dev/ttyUSB0")
+serial = serial.Serial(port="/dev/ttyUSB0", baudrate=115200, xonxoff=1, rtscts=1)
+gsm = GsmModem(serial)
+
 gsm.boot()
 ReverseApp(gsm)
