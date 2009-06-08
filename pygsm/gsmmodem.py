@@ -184,6 +184,53 @@ class GsmModem(object):
         return None
     
     
+    def send_sms(self, recipient, text):
+        print "MSG to %r: %r" % (recipient, text)
+        
+        # TODO: lock the modem
+        
+        try:
+            try:
+            
+                # initiate the sms, and give the device a second
+                # to raise an error. unfortunately, we can't just
+                # wait for the "> " prompt, because some modems
+                # will echo it FOLLOWED BY a CMS error
+                self.command(
+                    "AT+CMGS=\"%s\"\r" % (recipient),
+                    read_timeout=1)
+            
+            # if no error is raised within the timeout period,
+            # and the text-mode prompt WAS received, send the
+            # sms text, wait until it is accepted or rejected
+            # (text-mode messages are terminated with ascii char 26
+            # "SUBSTITUTE" (ctrl+z)), and return True (message sent)
+            except errors.GsmReadTimeoutError, err:
+                if err.pending_data[0] == ">":
+                    self.command(text, write_term=chr(26))
+                    return True
+                
+                # a timeout was raised, but no prompt nor
+                # error was received. i have no idea what
+                # is going on, so allow the error to propagate
+                else: raise
+        
+        # for all other errors...
+        # (likely CMS or CME from device)
+        except:
+            
+            # whatever went wrong, break out of the
+            # message prompt. if this is missed, all
+            # subsequent writes will go into the message!
+            self._write(chr(27))
+            
+            # rule of thumb: pygsm is meant to be embedded,
+            # so DO NOT EVER allow exceptions to propagate
+            # (obviously, this sucks. there should be an
+            # option, at least, but i'm being cautious)
+            return None
+    
+    
     def receive(self, callback):
         pass
     
