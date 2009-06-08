@@ -115,7 +115,10 @@ class GsmModem(object):
                 return buf_str
     
     
-    def wait(self, read_term=None, read_timeout=None):
+    def _wait(self, read_term=None, read_timeout=None):
+        """Read from the modem (blocking) one line at a time until a response
+           terminator ("OK", "ERROR", or "CMx ERROR...") is hit, then return
+           a list containing the lines."""
         print "Waiting for response"
         buffer = []
         
@@ -154,7 +157,7 @@ class GsmModem(object):
         
         # TODO: lock the modem
         self._write(cmd + write_term)
-        lines = self.wait(
+        lines = self._wait(
             read_term=read_term,
             read_timeout=read_timeout)
         
