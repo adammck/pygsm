@@ -3,6 +3,7 @@
 
 
 import re, time
+import errors
 
 # arch: pacman -S python-pyserial
 # debian: apt-get install pyserial
@@ -89,6 +90,18 @@ class GsmModem(object):
             
             if(buf=="OK"):
                 return buffer
+            
+            # some errors contain useful error codes, so raise a
+            # proper error with a description from pygsm/errors.py
+            m = re.match(r"^\+(CM[ES]) ERROR: (\d+)$", buf)
+            if m is not None:
+                type, code = m.groups()
+                raise(errors.GsmModemError(type, int(code)))
+            
+            # ...some errors are not so useful
+            # (at+cmee=1 should enable error codes)
+            if buf=="ERROR":
+                raise(errors.GsmModemError)
     
     
     def command(self, cmd, read_term=None, write_term="\r"):
