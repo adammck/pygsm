@@ -153,6 +153,10 @@ class GsmModem(object):
     
     
     def command(self, cmd, read_term=None, read_timeout=None, write_term="\r"):
+        """Issue a single AT command to the modem, and return the sanitized
+           response. Sanitization removes status notifications, command echo,
+           and incoming messages, (hopefully) leaving only the actual response
+           from the command."""
         print "Command: %r" % cmd
         
         # TODO: lock the modem
@@ -160,6 +164,11 @@ class GsmModem(object):
         lines = self._wait(
             read_term=read_term,
             read_timeout=read_timeout)
+        
+        # if the first line of the response echoes the cmdn
+        # (it shouldn't, if ATE0 worked), silently drop it
+        if lines[0] == cmd:
+            lines.pop(0)
         
         # remove all blank lines and unsolicited
         # status messages. i can't seem to figure
