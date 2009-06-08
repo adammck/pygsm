@@ -20,4 +20,4 @@ gsm = GsmModem(serial)
 gsm.boot()
 
 print "Modem Hardware: %r" % (gsm.hardware())
-print "Signal Strength: %r" % (gsm.signal_strength())
+print "Signal Strength: %r" % (gsm.wait_for_network())

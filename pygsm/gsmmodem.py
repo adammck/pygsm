@@ -168,3 +168,14 @@ class GsmModem(object):
         # None, so we can test it in the same way as False, but
         # check the type without raising an exception
         return None
+    
+    
+    def wait_for_network(self):
+        """Blocks until the signal strength indicates that the
+           device is active on the GSM network. It's a good idea
+           to call this before trying to send or receive anything."""
+        
+        while True:
+            csq = self.signal_strength()
+            if csq: return csq
+            time.sleep(1)
