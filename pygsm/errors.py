@@ -2,11 +2,19 @@
 # vim: ai ts=4 sts=4 et sw=4
 
 
-class GsmError(Exception):
+import serial
+
+
+class GsmError(serial.SerialException):
     pass
 
 
-class GsmModemError(Exception):
+class GsmReadTimeoutError(GsmError):
+    def __init__(self, pending_data):
+        self.pending_data = pending_data
+
+
+class GsmModemError(GsmError):
     STRINGS = {
         "CME": {
             3:   "Operation not allowed",

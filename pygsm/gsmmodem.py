@@ -61,11 +61,27 @@ class GsmModem(object):
         self.device.write(str)
     
     
-    def _read(self, read_term=None):
+    def _read(self, read_term=None, read_timeout=None):
         """Read from the modem (blocking) until _terminator_ is hit,
            (defaults to \r\n, which reads a single "line"), and return."""
         buffer = []
         
+        # if a different timeout was requested just
+        # for _this_ read, store and override the
+        # current device setting (not thread safe!)
+        if read_timeout is not None:
+            old_timeout = self.device.timeout
+            self.device.timeout = read_timeout
+        
+        def __reset_timeout():
+            """restore the device's previous timeout
+               setting, if we overrode it earlier."""
+            if read_timeout is not None:
+                self.device.timeout =\
+                    old_timeout
+        
+        # the default terminator reads
+        # until a newline is hit
         if not read_term:
             read_term = "\r\n"
         
@@ -74,19 +90,39 @@ class GsmModem(object):
             print "READ: %r" % buf
             buffer.append(buf)
             
-            if(buffer[-len(read_term)::]==list(read_term)):
+            # if a timeout was hit, raise an exception including the raw data that
+            # we've already read (in case the calling func was _expecting_ a timeout
+            # (wouldn't it be nice if serial.Serial.read returned None for this?)
+            if buf == "":
+                __reset_timeout()
+                print "_Read Timeout: %r" % (buffer)
+                raise(errors.GsmReadTimeoutError(buffer))
+            
+            # if last n characters of the buffer match the read
+            # terminator, return what we've received so far
+            if buffer[-len(read_term)::] == list(read_term):
                 buf_str = "".join(buffer).strip()
                 print "_Read: %r" % buf_str
+                
+                __reset_timeout()
                 return buf_str
     
     
-    def wait(self, read_term=None):
+    def wait(self, read_term=None, read_timeout=None):
         print "Waiting for response"
         buffer = []
         
         while(True):
-            buf = self._read(read_term)
+            buf = self._read(
+                read_term=read_term,
+                read_timeout=read_timeout)
+            
             buffer.append(buf)
+            
+            # if a timeout was hit during
+            # _read, just return what we have
+            if buf is None:
+                return buffer
             
             if(buf=="OK"):
                 return buffer
@@ -104,12 +140,14 @@ class GsmModem(object):
                 raise(errors.GsmModemError)
     
     
-    def command(self, cmd, read_term=None, write_term="\r"):
+    def command(self, cmd, read_term=None, read_timeout=None, write_term="\r"):
         print "Command: %r" % cmd
         
         # TODO: lock the modem
         self._write(cmd + write_term)
-        lines = self.wait()
+        lines = self.wait(
+            read_term=read_term,
+            read_timeout=read_timeout)
         
         # remove all blank lines and unsolicited
         # status messages. i can't seem to figure
