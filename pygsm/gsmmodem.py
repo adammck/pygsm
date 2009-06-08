@@ -135,3 +135,15 @@ class GsmModem(object):
     
     def receive(self, callback):
         pass
+    
+    
+    def hardware(self):
+        """Returns a dict of containing information about the physical
+           modem. The contents of each value are entirely manufacturer
+           dependant, and vary wildly between devices."""
+        
+        return {
+            "manufacturer": self.query("AT+CGMI"),
+            "model":        self.query("AT+CGMM"),
+            "revision":     self.query("AT+CGMR"),
+            "serial":       self.query("AT+CGSN") }
