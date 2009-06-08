@@ -96,14 +96,26 @@ class GsmModem(object):
         
         # TODO: lock the modem
         self._write(cmd + write_term)
-        out = self.wait()
-
+        lines = self.wait()
+        
+        # remove all blank lines and unsolicited
+        # status messages. i can't seem to figure
+        # out how to reliably disable them, and
+        # AT+WIND=0 doesn't work on this modem
+        lines = [
+            line
+            for line in lines
+            if line      != "" or\
+               line[0:6] == "+WIND:" or\
+               line[0:6] == "+CREG:" or\
+               line[0:7] == "+CGRED:"]
+				
         # rest up for a bit (modems are
         # slow, and get confused easily)
         time.sleep(self.cmd_delay)
         
-        print "Output: %s" % out
-        return out
+        print "Output: %s" % lines
+        return lines
     
     
     def query(self, cmd):
