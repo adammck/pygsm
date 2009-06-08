@@ -9,7 +9,19 @@ class GsmError(serial.SerialException):
     pass
 
 
-class GsmReadTimeoutError(GsmError):
+class GsmIOError(GsmError):
+    pass
+
+
+class GsmWriteError(GsmIOError):
+    pass
+
+
+class GsmReadError(GsmIOError):
+    pass
+
+
+class GsmReadTimeoutError(GsmReadError):
     def __init__(self, pending_data):
         self.pending_data = pending_data
 
@@ -88,4 +100,3 @@ class GsmModemError(GsmError):
         return "%s ERROR %d: %s" % (
             self.type, self.code,
             self.STRINGS[self.type][self.code])
-

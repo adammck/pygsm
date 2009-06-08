@@ -57,8 +57,15 @@ class GsmModem(object):
     
     def _write(self, str):
         """Write a string to the modem."""
-        print "WRITE: %r" % str
-        self.device.write(str)
+        try:
+            print "WRITE: %r" % str
+            self.device.write(str)
+        
+        # if the device couldn't be written to,
+        # wrap the error in something that can
+        # sensibly be caught at a higher level
+        except OSError, err:
+            raise(errors.GsmWriteError)
     
     
     def _read(self, read_term=None, read_timeout=None):
@@ -277,3 +284,12 @@ class GsmModem(object):
             csq = self.signal_strength()
             if csq: return csq
             time.sleep(1)
+    
+    
+    def ping(self):
+        try:
+            self.query("AT")
+            return True
+            
+        except errors.GsmError:
+            return None
