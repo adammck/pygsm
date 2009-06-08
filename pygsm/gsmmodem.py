@@ -119,18 +119,18 @@ class GsmModem(object):
     
     
     def query(self, cmd):
-	    print "Query: %r" % cmd
-	    out = self.command(cmd)
-	    
-	    # the only valid response to a "query" is a
-	    # single line followed by "OK". if all looks
-	    # well, return just the single line
-	    if(len(out) == 2) and (out[-1] == "OK"):
-	        return out[0]
-	    
-	    # something went wrong, so return the very
-	    # ambiguous None. it's better than blowing up
-	    return None
+        print "Query: %r" % cmd
+        out = self.command(cmd)
+
+        # the only valid response to a "query" is a
+        # single line followed by "OK". if all looks
+        # well, return just the single line
+        if(len(out) == 2) and (out[-1] == "OK"):
+            return out[0]
+
+        # something went wrong, so return the very
+        # ambiguous None. it's better than blowing up
+        return None
     
     
     def receive(self, callback):
