@@ -287,6 +287,11 @@ class GsmModem(object):
     
     
     def ping(self):
+        """Sends the "AT" command to the device, and returns true
+           if it is acknowledged. Since incoming notifications and
+           messages are intercepted automatically, this is a good
+           way to poll for new messages without using a worker
+           thread like RubyGSM."""
         try:
             self.query("AT")
             return True
