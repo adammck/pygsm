@@ -17,6 +17,7 @@ class ReverseApp(object):
 
 serial = serial.Serial(port="/dev/ttyUSB0", baudrate=115200, xonxoff=1, rtscts=1)
 gsm = GsmModem(serial)
-
 gsm.boot()
-ReverseApp(gsm)
+
+print "Modem Hardware: %r" % (gsm.hardware())
+print "Signal Strength: %r" % (gsm.signal_strength())

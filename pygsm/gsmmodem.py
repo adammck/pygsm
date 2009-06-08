@@ -147,3 +147,24 @@ class GsmModem(object):
             "model":        self.query("AT+CGMM"),
             "revision":     self.query("AT+CGMR"),
             "serial":       self.query("AT+CGSN") }
+
+
+    def signal_strength(self):
+        """Returns an integer between 1 and 99, representing the current
+           signal strength of the GSM network, False if we don't know, or
+           None if the modem can't report it."""
+        
+        data = self.query("AT+CSQ")
+        md = re.match(r"^\+CSQ: (\d+),", data)
+        
+        # 99 represents "not known or not detectable". we'll
+        # return False for that (so we can test it for boolean
+        # equality), or an integer of the signal strength.
+        if md is not None:
+            csq = int(md.group(1))
+            return csq if csq < 99 else False
+        
+        # the response from AT+CSQ couldn't be parsed. return
+        # None, so we can test it in the same way as False, but
+        # check the type without raising an exception
+        return None
