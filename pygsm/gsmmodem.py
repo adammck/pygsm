@@ -119,6 +119,9 @@ class GsmModem(object):
         print "Waiting for response"
         buffer = []
         
+        # keep on looping until a command terminator
+        # is encountered. these are NOT the same as the
+        # "read_term" argument - only OK or ERROR is valid
         while(True):
             buf = self._read(
                 read_term=read_term,
@@ -126,12 +129,11 @@ class GsmModem(object):
             
             buffer.append(buf)
             
-            # if a timeout was hit during
-            # _read, just return what we have
-            if buf is None:
-                return buffer
-            
-            if(buf=="OK"):
+            # most commands return OK for success, but there
+            # are some exceptions. we're not checking those
+            # here (unlike RubyGSM), because they should be
+            # handled when they're _expected_
+            if buf == "OK":
                 return buffer
             
             # some errors contain useful error codes, so raise a
@@ -143,7 +145,7 @@ class GsmModem(object):
             
             # ...some errors are not so useful
             # (at+cmee=1 should enable error codes)
-            if buf=="ERROR":
+            if buf == "ERROR":
                 raise(errors.GsmModemError)
     
     
