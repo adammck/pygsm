@@ -356,6 +356,12 @@ class GsmModem(object):
     
     
     def query(self, cmd):
+        """Issues a single AT command to the modem, and returns the relevant
+           part of the response. This only works for commands that return a
+           single line followed by "OK", but conveniently, this covers almost
+           all AT commands that I've ever needed to use.
+           
+           For all other commands, returns None."""
         out = self.command(cmd)
 
         # the only valid response to a "query" is a
@@ -370,6 +376,11 @@ class GsmModem(object):
     
     
     def send_sms(self, recipient, text):
+        """Sends an SMS to _recipient_ containing _text_. Some networks
+           will automatically chunk long messages into multiple parts,
+           and reassembled them upon delivery, but some will silently
+           drop them. At the moment, pyGSM does nothing to avoid this,
+           so try to keep _text_ under 160 characters."""
         
         try:
             try:
@@ -463,8 +474,9 @@ class GsmModem(object):
            messages are intercepted automatically, this is a good
            way to poll for new messages without using a worker
            thread like RubyGSM."""
+        
         try:
-            self.query("AT")
+            self.command("AT")
             return True
             
         except errors.GsmError:
