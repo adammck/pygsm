@@ -89,7 +89,6 @@ class GsmModem(object):
     def _write(self, str):
         """Write a string to the modem."""
         try:
-            print "WRITE: %r" % str
             self.device.write(str)
         
         # if the device couldn't be written to,
@@ -125,7 +124,6 @@ class GsmModem(object):
         
         while(True):
             buf = self.device.read()
-            print "READ: %r" % buf
             buffer.append(buf)
             
             # if a timeout was hit, raise an exception including the raw data that
@@ -133,15 +131,12 @@ class GsmModem(object):
             # (wouldn't it be nice if serial.Serial.read returned None for this?)
             if buf == "":
                 __reset_timeout()
-                print "_Read Timeout: %r" % (buffer)
                 raise(errors.GsmReadTimeoutError(buffer))
             
             # if last n characters of the buffer match the read
             # terminator, return what we've received so far
             if buffer[-len(read_term)::] == list(read_term):
                 buf_str = "".join(buffer).strip()
-                print "_Read: %r" % buf_str
-                
                 __reset_timeout()
                 return buf_str
     
@@ -150,7 +145,6 @@ class GsmModem(object):
         """Read from the modem (blocking) one line at a time until a response
            terminator ("OK", "ERROR", or "CMx ERROR...") is hit, then return
            a list containing the lines."""
-        print "Waiting for response"
         buffer = []
         
         # keep on looping until a command terminator
@@ -219,12 +213,10 @@ class GsmModem(object):
         # a format the pyGSM doesn't support. this sucks, but isn't
         # important enough to explode like RubyGSM does
         except ValueError:
-            print "Couldn't parse timestamp: %r" % timestamp
             return None
 
 	
     def _parse_incoming_sms(self, lines):
-        print "_parse: %r" % (lines)
         output_lines = []
         n = 0
         
@@ -321,7 +313,6 @@ class GsmModem(object):
         
         # return the lines that we weren't
         # interested in (almost all of them!)
-        print "_parsed: %r" % (output_lines)
         return output_lines
 
 
@@ -330,9 +321,7 @@ class GsmModem(object):
            response. Sanitization removes status notifications, command echo,
            and incoming messages, (hopefully) leaving only the actual response
            from the command."""
-        print "Command: %r" % cmd
         
-        # TODO: lock the modem
         self._write(cmd + write_term)
         lines = self._wait(
             read_term=read_term,
@@ -363,12 +352,10 @@ class GsmModem(object):
         # slow, and get confused easily)
         time.sleep(self.cmd_delay)
         
-        print "Output: %s" % lines
         return lines
     
     
     def query(self, cmd):
-        print "Query: %r" % cmd
         out = self.command(cmd)
 
         # the only valid response to a "query" is a
@@ -383,9 +370,6 @@ class GsmModem(object):
     
     
     def send_sms(self, recipient, text):
-        print "MSG to %r: %r" % (recipient, text)
-        
-        # TODO: lock the modem
         
         try:
             try:
