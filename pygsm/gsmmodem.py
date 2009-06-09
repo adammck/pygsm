@@ -15,26 +15,15 @@ class GsmModem(object):
     # override these after init, and
     # before boot. they're not sanity
     # checked, so go crazy.
-    baud             = 9600
-    cmd_delay        = 0.1
-    device_timeout   = 10
-    reset_on_failure = True
+    cmd_delay = 0.1
     
     
-    def __init__(self, port_or_device):
+    def __init__(self, *args, **kwargs):
         
-        # accept an existing serial port object,
-        # for modems which require non-default
-        # parameters or init strings (rather than
-        # wrapping all those calls opaquely here)
-        if isinstance(port_or_device, serial.Serial):
-            self.device = port_or_device
-        
-        # otherwise, assume that the single argument
-        # is a string containing the serial port that
-        # we should connect to
-        else:
-            self.port = port
+        # store the connection args, since we might need
+        # to recreate the serial connection again later
+        self.device_args = args
+        self.device_kwargs = kwargs
         
         # to cache parts of multi-part messages
         # until the last part is delivered
@@ -42,21 +31,48 @@ class GsmModem(object):
 
         # to store unhandled incoming messages
         self.incoming_queue = []
-    
-    
-    def boot(self, reset=False):
-        """Initializes the modem. Must be called after init, but
-           before doing anything that expects the modem to be ready."""
         
-        # create the conection to the modem,
-        # if it hasn't already been done
-        if not self.device:
-            self.device = serial.Serial(self.port)
+        # connect to the device on init, to fail as early
+        # as possible if it doesn't exist or can't be opened
+        self._connect()
+    
+    
+    def _connect(self, reconnect=False):
+        """Create the connection to the modem via pySerial, optionally
+           killing and re-creating any existing connection."""
+        
+        # if no connection exists, create it
+        # the reconnect flag is irrelevant
+        if not hasattr(self, "device") or (self.device is None):
+            self.device = serial.Serial(
+                *self.device_args,
+                **self.device_kwargs)
+                
+        # the port already exists, but if we're
+        # reconnecting, then kill it and recurse
+        # to recreate it. this is useful when the
+        # connection has died, but nobody noticed
+        elif reconnect:
+            if self.device.isOpen():
+                self.device.close()
+                self.device = None
+            self._connect(False)
+        
+        return self.device
+    
+    
+    def boot(self, reboot=False):
+        """Initializes the modem. Must be called after init and connect,
+           but before doing anything that expects the modem to be ready."""
+        
+        # first, ensure that we're connected
+        # to the modem
+        self._connect()
         
         # the safest way to boot the modem is to
         # reset it first, but this is _hella slow_,
         # so only do it if explicitly requested
-        if reset:
+        if reboot:
             self.command("AT+CFUN=1")
         
         # set some sensible defaults, to make

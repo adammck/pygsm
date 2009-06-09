@@ -31,9 +31,7 @@ class CountLettersApp(object):
             time.sleep(2)
             
 
-
-serial = serial.Serial(port="/dev/ttyUSB0", baudrate=115200, xonxoff=1, rtscts=1)
-gsm = GsmModem(serial)
+gsm = GsmModem(port="/dev/ttyUSB0", baudrate=115200, xonxoff=1, rtscts=1)
 gsm.boot()
 
 
