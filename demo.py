@@ -29,12 +29,16 @@ class CountLettersApp(object):
             # no messages? wait a couple of seconds
             # (let's not blow up the modem), and retry
             time.sleep(2)
-            
 
-gsm = GsmModem(port="/dev/ttyUSB0", baudrate=115200, xonxoff=1, rtscts=1)
 
-print "Modem Hardware: %r" % (gsm.hardware())
-print "Signal Strength: %r" % (gsm.wait_for_network())
+# connect to my multitech MTCBA-G-U-F4 modem,
+#  which requires more configuration than most
+gsm = GsmModem(
+    port="/dev/ttyUSB0",
+    baudrate=115200,
+    xonxoff=1,
+    rtscts=1)
 
+# start the demo app
 app = CountLettersApp(gsm)
 app.serve_forever()
