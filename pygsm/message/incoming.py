@@ -21,6 +21,11 @@ class IncomingMessage(object):
         self._received = datetime.datetime.now()
     
     
+    def __str__(self):
+        return "<pygsm.IncomingMessage from %r: %r>" %\
+            (self.sender, self.text)
+    
+    
     def respond(self, text):
         """Responds to this IncomingMessage by sending a message containing
            _text_ back to the sender via the modem that created this object."""
