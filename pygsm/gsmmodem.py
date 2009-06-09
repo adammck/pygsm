@@ -61,6 +61,13 @@ class GsmModem(object):
         return self.device
     
     
+    def disconnect(self):
+        """Disconnects from the modem."""
+        
+        self.device.close()
+        self.device = None
+    
+    
     def boot(self, reboot=False):
         """Initializes the modem. Must be called after init and connect,
            but before doing anything that expects the modem to be ready."""
