@@ -35,6 +35,13 @@ class GsmModem(object):
         # we should connect to
         else:
             self.port = port
+        
+        # to cache parts of multi-part messages
+        # until the last part is delivered
+        self.multipart = {}
+
+        # to store unhandled incoming messages
+        self.incoming_queue = []
     
     
     def boot(self):
@@ -53,6 +60,9 @@ class GsmModem(object):
         self.command("AT+CMEE=1") # useful error messages
         self.command("AT+WIND=0") # disable notifications
         self.command("AT+CMGF=1") # switch to TEXT mode
+        
+        # enable new message notification
+        self.command("AT+CNMI=2,2,0,0,0")
     
     
     def _write(self, str):
@@ -152,6 +162,117 @@ class GsmModem(object):
                 raise(errors.GsmModemError)
     
     
+    INCOMING_FMT = "%y/%m/%d,%H:%M:%S%Z"
+    
+    def _parse_incoming_timestamp(ts):
+        def __replace(str):
+            return sprintf("%02d", int(str.groups())/4)
+
+        # extract the weirdo quarter-hour timezone,
+        # convert it into a regular hourly offset
+        sane_ts = re.sub(r"(\d+)$", ts, __replace)
+
+        # parse the timestamp, and attempt to re-align
+        # it according to the timezone we extracted
+        return DateTime.strptime(sane_ts, self.INCOMING_FMT)
+	
+	
+    def _parse_incoming_sms(self, lines):
+        n = 0
+        
+        # iterate the lines like it's 1984
+        # (because we're patching the array,
+        # which is hard work for iterators)
+        while n < len(lines):
+            
+            # not a CMT string? ignore it
+            # and move on to the next line
+            if (n not in lines) or (lines[n][0:5] != "+CMT"):
+                n += 1
+                continue
+            
+            # since this line IS a CMT string (an incoming
+            # SMS), parse it and store it to deal with later
+            m = re.match(r'^\+CMT: "(.+?)",.*?,"(.+?)".*?$', lines[n])
+            if m is None:
+                
+                # couldn't parse the string, so just move
+                # on to the next line. TODO: log this error
+                n += 1
+                next
+            
+            # extract the meta-info from the CMT line,
+            # and the message from the FOLLOWING line
+            sender, timestamp = m.groups()
+            text = lines[n+1].strip()
+
+            # notify the network that we accepted
+            # the incoming message (for read receipt)
+            # BEFORE pushing it to the incoming queue
+            # (to avoid really ugly race condition if
+            # the message is grabbed from the queue
+            # and responded to quickly, before we get
+            # a chance to issue at+cnma)
+            try:
+                self.command("AT+CNMA")
+
+            # not terribly important if it
+            # fails, even though it shouldn't
+            except errors.GsmError:
+                
+                #self.log("Receipt acknowledgement (CNMA) was rejected")
+                # TODO: also log this!
+                pass
+            
+            # (i'm using while/break as an alternative to catch/throw
+            # here, since python doesn't have one. we might abort early
+            # if this is part of a multi-part message, but not the last
+            while True:
+                
+                # multi-part messages begin with ASCII 130 followed
+                # by "@" (ASCII 64). TODO: more docs on this, i wrote
+                # this via reverse engineering and lost my notes
+                if (ord(text[0]) == 130) and (text[1] == "@"):
+                    part_text = text[7:]
+
+                    # ensure we have a place for the incoming
+                    # message part to live as they are delivered
+                    if sender not in self.multipart:
+                        self.multipart[sender] = []
+
+                    # append THIS PART
+                    self.multipart[sender].append(part_text)
+
+                    # abort if this is not the last part
+                    if ord(text[5]) != 173:
+                        break
+
+                    # last part, so switch out the received
+                    # part with the whole message, to be processed
+                    # below (the sender and timestamp are the same
+                    # for all parts, so no change needed there)
+                    text = "".join(self.multipart[sender])
+                    del self.multipart[sender]
+
+                # store the incoming data to be picked up
+                # from the attr_accessor as a tuple (this
+                # is kind of ghetto, and WILL change later)
+                sent = self._parse_incoming_timestamp(timestamp)
+                msg = GsmIncomingMessage(self, sender, sent, text)
+                self.incoming_queue.append(msg)
+                
+                # don't loop! the only reason that this
+                # "while" exists is to jump out early
+                break
+            
+            # drop the two CMT lines (meta-info and message),
+            # and patch the index to hit the next unchecked
+            # line during the next iteration
+            del lines[n]
+            del lines[n]
+            n -= 1
+
+
     def command(self, cmd, read_term=None, read_timeout=None, write_term="\r"):
         """Issue a single AT command to the modem, and return the sanitized
            response. Sanitization removes status notifications, command echo,
@@ -165,7 +286,7 @@ class GsmModem(object):
             read_term=read_term,
             read_timeout=read_timeout)
         
-        # if the first line of the response echoes the cmdn
+        # if the first line of the response echoes the cmd
         # (it shouldn't, if ATE0 worked), silently drop it
         if lines[0] == cmd:
             lines.pop(0)
@@ -181,7 +302,11 @@ class GsmModem(object):
                line[0:6] == "+WIND:" or\
                line[0:6] == "+CREG:" or\
                line[0:7] == "+CGRED:"]
-				
+        
+        # parse out any incoming sms that were bundled
+        # with this data (to be fetched later by an app)
+        self._parse_incoming_sms(lines)
+        
         # rest up for a bit (modems are
         # slow, and get confused easily)
         time.sleep(self.cmd_delay)
