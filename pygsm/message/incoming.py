@@ -19,7 +19,14 @@ class IncomingMessage(object):
         # received right now, since we
         # don't have an incoming buffer
         self._received = datetime.datetime.now()
-
+    
+    
+    def respond(self, text):
+        """Responds to this IncomingMessage by sending a message containing
+           _text_ back to the sender via the modem that created this object."""
+        return self.device.send_sms(self.sender, text)
+    
+    
     @property
     def device(self):
         """Returns the pygsm.GsmModem device which received
