@@ -44,7 +44,7 @@ class GsmModem(object):
         self.incoming_queue = []
     
     
-    def boot(self):
+    def boot(self, reset=False):
         """Initializes the modem. Must be called after init, but
            before doing anything that expects the modem to be ready."""
         
@@ -53,9 +53,14 @@ class GsmModem(object):
         if not self.device:
             self.device = serial.Serial(self.port)
         
+        # the safest way to boot the modem is to
+        # reset it first, but this is _hella slow_,
+        # so only do it if explicitly requested
+        if reset:
+            self.command("AT+CFUN=1")
+        
         # set some sensible defaults, to make
         # the various modems more consistant
-        self.command("AT+CFUN=1") # reset the modem
         self.command("ATE0")      # echo off
         self.command("AT+CMEE=1") # useful error messages
         self.command("AT+WIND=0") # disable notifications
