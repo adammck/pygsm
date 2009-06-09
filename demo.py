@@ -32,8 +32,6 @@ class CountLettersApp(object):
             
 
 gsm = GsmModem(port="/dev/ttyUSB0", baudrate=115200, xonxoff=1, rtscts=1)
-gsm.boot()
-
 
 print "Modem Hardware: %r" % (gsm.hardware())
 print "Signal Strength: %r" % (gsm.wait_for_network())

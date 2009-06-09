@@ -32,12 +32,12 @@ class GsmModem(object):
         # to store unhandled incoming messages
         self.incoming_queue = []
         
-        # connect to the device on init, to fail as early
-        # as possible if it doesn't exist or can't be opened
-        self._connect()
+        # boot the device on init, to fail as
+        # early as possible if it can't be opened
+        self.boot()
     
     
-    def _connect(self, reconnect=False):
+    def connect(self, reconnect=False):
         """Create the connection to the modem via pySerial, optionally
            killing and re-creating any existing connection."""
         
@@ -65,9 +65,9 @@ class GsmModem(object):
         """Initializes the modem. Must be called after init and connect,
            but before doing anything that expects the modem to be ready."""
         
-        # first, ensure that we're connected
-        # to the modem
-        self._connect()
+        # first, ensure that we're
+        # connected to the modem
+        self.connect()
         
         # the safest way to boot the modem is to
         # reset it first, but this is _hella slow_,
