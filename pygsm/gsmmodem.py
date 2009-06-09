@@ -2,7 +2,7 @@
 # vim: ai ts=4 sts=4 et sw=4
 
 
-import re, time
+import re, datetime, time
 import errors, message
 
 # arch: pacman -S python-pyserial
@@ -162,28 +162,45 @@ class GsmModem(object):
                 raise(errors.GsmModemError)
     
     
-    INCOMING_FMT = "%y/%m/%d,%H:%M:%S%Z"
+    SCTS_FMT = "%y/%m/%d,%H:%M:%S"
     
     def _parse_incoming_timestamp(self, timestamp):
-        pattern = r"\-(\d+)$"
-        m = re.match(pattern, timestamp)
-        if m is not None:
-            try:
-                timestamp = re.sub(pattern, "", timestamp)
-                t = time.strptime(timestamp, self.INCOMING_FMT)
-                t.timezone = int(m.groups(0)) * 900
-                print "Parsed timestamp %r into %r" % (timestamp, t)
-                return t
-            
-            # it's no big deal if the timestamp
-            # couldn't be parsed, so ignore it
-            except ValueError:
-                print "Couldn't parse timestamp: %r" % timestamp
-                pass
+        """Parse a Service Center Time Stamp (SCTS) string into a Python datetime
+           object, or None if the timestamp couldn't be parsed. The SCTS format does
+           not seem to be standardized, but looks something like: YY/MM/DD,HH:MM:SS."""
         
-        # fall back to None
-        return None
-	
+        # timestamps usually have trailing timezones, measured
+        # in 15-minute intervals (?!), which is not handled by
+        # python's datetime lib. if _this_ timezone does, chop
+        # it off, and note the actual offset in minutes
+        tz_pattern = r"\-(\d+)$"
+        m = re.search(tz_pattern, timestamp)
+        if m is not None:
+            timestamp = re.sub(tz_pattern, "", timestamp)
+            tz_offset = datetime.timedelta(minutes=int(m.group(0)) * 15)
+        
+        # we won't be modifying the output, but
+        # still need an empty timedelta to subtract
+        else: tz_offset = datetime.timedelta()
+        
+        # attempt to parse the (maybe modified) timestamp into
+        # a time_struct, and convert it into a datetime object
+        try:
+            time_struct = time.strptime(timestamp, self.SCTS_FMT)
+            dt = datetime.datetime(*time_struct[:6]) 
+            
+            # patch the time to represent LOCAL TIME, since
+            # the datetime object doesn't seem to represent
+            # timezones... at all
+            return dt - tz_offset
+            
+        # if the timestamp couldn't be parsed, we've encountered
+        # a format the pyGSM doesn't support. this sucks, but isn't
+        # important enough to explode like RubyGSM does
+        except ValueError:
+            print "Couldn't parse timestamp: %r" % timestamp
+            return None
+
 	
     def _parse_incoming_sms(self, lines):
         print "_parse: %r" % (lines)
@@ -384,7 +401,7 @@ class GsmModem(object):
             # subsequent writes will go into the message!
             self._write(chr(27))
             
-            # rule of thumb: pygsm is meant to be embedded,
+            # rule of thumb: pyGSM is meant to be embedded,
             # so DO NOT EVER allow exceptions to propagate
             # (obviously, this sucks. there should be an
             # option, at least, but i'm being cautious)
