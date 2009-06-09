@@ -413,10 +413,6 @@ class GsmModem(object):
             return None
     
     
-    def receive(self, callback):
-        pass
-    
-    
     def hardware(self):
         """Returns a dict of containing information about the physical
            modem. The contents of each value are entirely manufacturer
@@ -473,3 +469,24 @@ class GsmModem(object):
             
         except errors.GsmError:
             return None
+
+    
+    def next_message(self, fetch=True):
+        """Returns the next waiting IncomingMessage object, or None if
+           the queue is empty. The optional _fetch_ parameter controls
+           whether the modem is polled before checking, which can be
+           disabled in case you're polling in a separate thread."""
+        
+        # optionally ping the modem, to give it the chance
+        # to deliver any waiting messages (TODO: fetch
+        # from SIM and device storage, like RubyGSM)
+        if fetch:
+            self.ping()
+        
+        # abort if there are no messages waiting
+        if not self.incoming_queue:
+            return None
+        
+        # remove the message that has been waiting
+        # longest from the queue, and return it
+        return self.incoming_queue.pop(0)
