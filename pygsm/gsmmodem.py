@@ -3,7 +3,7 @@
 
 
 import re, time
-import errors
+import errors, message
 
 # arch: pacman -S python-pyserial
 # debian: apt-get install pyserial
@@ -164,20 +164,30 @@ class GsmModem(object):
     
     INCOMING_FMT = "%y/%m/%d,%H:%M:%S%Z"
     
-    def _parse_incoming_timestamp(ts):
-        def __replace(str):
-            return sprintf("%02d", int(str.groups())/4)
-
-        # extract the weirdo quarter-hour timezone,
-        # convert it into a regular hourly offset
-        sane_ts = re.sub(r"(\d+)$", ts, __replace)
-
-        # parse the timestamp, and attempt to re-align
-        # it according to the timezone we extracted
-        return DateTime.strptime(sane_ts, self.INCOMING_FMT)
+    def _parse_incoming_timestamp(self, timestamp):
+        pattern = r"\-(\d+)$"
+        m = re.match(pattern, timestamp)
+        if m is not None:
+            try:
+                timestamp = re.sub(pattern, "", timestamp)
+                t = time.strptime(timestamp, self.INCOMING_FMT)
+                t.timezone = int(m.groups(0)) * 900
+                print "Parsed timestamp %r into %r" % (timestamp, t)
+                return t
+            
+            # it's no big deal if the timestamp
+            # couldn't be parsed, so ignore it
+            except ValueError:
+                print "Couldn't parse timestamp: %r" % timestamp
+                pass
+        
+        # fall back to None
+        return None
 	
 	
     def _parse_incoming_sms(self, lines):
+        print "_parse: %r" % (lines)
+        output_lines = []
         n = 0
         
         # iterate the lines like it's 1984
@@ -185,9 +195,11 @@ class GsmModem(object):
         # which is hard work for iterators)
         while n < len(lines):
             
-            # not a CMT string? ignore it
-            # and move on to the next line
-            if (n not in lines) or (lines[n][0:5] != "+CMT"):
+            # not a CMT string? add it back into the
+            # output (since we're not interested in it)
+            # and move on to the next
+            if lines[n][0:5] != "+CMT:":
+                output_lines.append(lines[n])
                 n += 1
                 continue
             
@@ -258,19 +270,21 @@ class GsmModem(object):
                 # from the attr_accessor as a tuple (this
                 # is kind of ghetto, and WILL change later)
                 sent = self._parse_incoming_timestamp(timestamp)
-                msg = GsmIncomingMessage(self, sender, sent, text)
+                msg = message.IncomingMessage(self, sender, sent, text)
                 self.incoming_queue.append(msg)
                 
                 # don't loop! the only reason that this
                 # "while" exists is to jump out early
                 break
             
-            # drop the two CMT lines (meta-info and message),
-            # and patch the index to hit the next unchecked
-            # line during the next iteration
-            del lines[n]
-            del lines[n]
-            n -= 1
+            # jump over the CMT line, and the
+            # text line, and continue iterating
+            n += 2
+        
+        # return the lines that we weren't
+        # interested in (almost all of them!)
+        print "_parsed: %r" % (output_lines)
+        return output_lines
 
 
     def command(self, cmd, read_term=None, read_timeout=None, write_term="\r"):
@@ -305,7 +319,7 @@ class GsmModem(object):
         
         # parse out any incoming sms that were bundled
         # with this data (to be fetched later by an app)
-        self._parse_incoming_sms(lines)
+        lines = self._parse_incoming_sms(lines)
         
         # rest up for a bit (modems are
         # slow, and get confused easily)

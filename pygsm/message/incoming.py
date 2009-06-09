@@ -3,4 +3,5 @@
 
 
 class IncomingMessage(object):
-	pass
+    def __init__(self, device, sender, sent, text):
+    	pass
