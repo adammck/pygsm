@@ -1,0 +1,124 @@
+Help on class GsmModem in module pygsm.gsmmodem:
+
+class GsmModem(__builtin__.object)
+ |  
+ |  pyGSM is a Python module which uses pySerial to provide a nifty
+ |  interface to send and receive SMS via a GSM Modem. It was ported
+ |  from RubyGSM, and provides (almost) all of the same features. It's
+ |  easy to get started:
+ |  
+ |     # create a GsmModem object:
+ |     >>> import pygsm
+ |     >>> modem = pygsm.GsmModem(port="/dev/ttyUSB0")
+ |  
+ |     # harass Evan over SMS:
+ |     # (try to do this before 11AM)
+ |     >>> modem.send_sms("+13364130840", "Hey, wake up!")
+ |  
+ |     # check for incoming SMS:
+ |     >>> print modem.next_message()
+ |     <pygsm.IncomingMessage from +13364130840: "Leave me alone!">
+ |  
+ |  
+ |  There are various ways of polling for incoming messages -- a choice
+ |  which has been deliberately left to the application author (unlike
+ |  RubyGSM). Execute `python -m pygsm.gsmmodem` to run this example:
+ |  
+ |     # connect to the modem
+ |     modem = pygsm.GsmModem(port=sys.argv[1])
+ |        
+ |     # check for new messages every two
+ |     # seconds for the rest of forever
+ |     while True:
+ |         msg = modem.next_message()
+ |         
+ |         # we got a message! respond with
+ |         # something useless, as an example
+ |         if msg is not None:
+ |             msg.respond("Thanks for those %d characters!" %
+ |                 len(msg.text))
+ |         
+ |         # no messages? wait a couple
+ |         # of seconds and try again
+ |         else: time.sleep(2)
+ |  
+ |  
+ |  pyGSM is distributed via GitHub:
+ |  http://github.com/adammck/pygsm
+ |  
+ |  Bugs reports (especially for
+ |  unsupported devices) are welcome:
+ |  http://github.com/adammck/pygsm/issues
+ |  
+ |  
+ |  
+ |  
+ |  Methods defined here:
+ |  
+ |  __init__(self, *args, **kwargs)
+ |      Creates, connects to, and boots a GSM Modem. All of the arguments
+ |      are optional (although "port=" should almost always be provided),
+ |      and passed along to serial.Serial.__init__ verbatim. For all of
+ |      the possible configration options, see:
+ |      
+ |      http://pyserial.wiki.sourceforge.net/pySerial#tocpySerial10
+ |  
+ |  boot(self, reboot=False)
+ |      Initializes the modem. Must be called after init and connect,
+ |      but before doing anything that expects the modem to be ready.
+ |  
+ |  command(self, cmd, read_term=None, read_timeout=None, write_term='\r')
+ |      Issue a single AT command to the modem, and return the sanitized
+ |      response. Sanitization removes status notifications, command echo,
+ |      and incoming messages, (hopefully) leaving only the actual response
+ |      from the command.
+ |  
+ |  connect(self, reconnect=False)
+ |      Creates the connection to the modem via pySerial, optionally
+ |      killing and re-creating any existing connection.
+ |  
+ |  disconnect(self)
+ |      Disconnects from the modem.
+ |  
+ |  hardware(self)
+ |      Returns a dict of containing information about the physical
+ |      modem. The contents of each value are entirely manufacturer
+ |      dependant, and vary wildly between devices.
+ |  
+ |  next_message(self, fetch=True)
+ |      Returns the next waiting IncomingMessage object, or None if
+ |      the queue is empty. The optional _fetch_ parameter controls
+ |      whether the modem is polled before checking, which can be
+ |      disabled in case you're polling in a separate thread.
+ |  
+ |  ping(self)
+ |      Sends the "AT" command to the device, and returns true
+ |      if it is acknowledged. Since incoming notifications and
+ |      messages are intercepted automatically, this is a good
+ |      way to poll for new messages without using a worker
+ |      thread like RubyGSM.
+ |  
+ |  query(self, cmd)
+ |      Issues a single AT command to the modem, and returns the relevant
+ |      part of the response. This only works for commands that return a
+ |      single line followed by "OK", but conveniently, this covers almost
+ |      all AT commands that I've ever needed to use.
+ |      
+ |      For all other commands, returns None.
+ |  
+ |  send_sms(self, recipient, text)
+ |      Sends an SMS to _recipient_ containing _text_. Some networks
+ |      will automatically chunk long messages into multiple parts,
+ |      and reassembled them upon delivery, but some will silently
+ |      drop them. At the moment, pyGSM does nothing to avoid this,
+ |      so try to keep _text_ under 160 characters.
+ |  
+ |  signal_strength(self)
+ |      Returns an integer between 1 and 99, representing the current
+ |      signal strength of the GSM network, False if we don't know, or
+ |      None if the modem can't report it.
+ |  
+ |  wait_for_network(self)
+ |      Blocks until the signal strength indicates that the
+ |      device is active on the GSM network. It's a good idea
+ |      to call this before trying to send or receive anything.
