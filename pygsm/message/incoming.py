@@ -21,8 +21,8 @@ class IncomingMessage(object):
         self._received = datetime.datetime.now()
     
     
-    def __str__(self):
-        return "<pygsm.IncomingMessage from %r: %r>" %\
+    def __repr__(self):
+        return "<pygsm.IncomingMessage from %s: %r>" %\
             (self.sender, self.text)
     
     
