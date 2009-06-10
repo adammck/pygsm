@@ -38,7 +38,7 @@ class GsmModem(object):
     
     
     def connect(self, reconnect=False):
-        """Create the connection to the modem via pySerial, optionally
+        """Creates the connection to the modem via pySerial, optionally
            killing and re-creating any existing connection."""
         
         # if no connection exists, create it
@@ -53,10 +53,8 @@ class GsmModem(object):
         # to recreate it. this is useful when the
         # connection has died, but nobody noticed
         elif reconnect:
-            if self.device.isOpen():
-                self.device.close()
-                self.device = None
-            self._connect(False)
+            self.disconnect()
+            self.connect(False)
         
         return self.device
     
@@ -64,8 +62,17 @@ class GsmModem(object):
     def disconnect(self):
         """Disconnects from the modem."""
         
-        self.device.close()
-        self.device = None
+        # attempt to close and destroy the device
+        if hasattr(self, "device") and (self.device is None):
+            if self.device.isOpen():
+                self.device.close()
+                self.device = None
+                return True
+        
+        # for some reason, the device
+        # couldn't be closed. it probably
+        # just isn't open yet
+        return False
     
     
     def boot(self, reboot=False):
