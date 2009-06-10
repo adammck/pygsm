@@ -33,12 +33,17 @@ class CountLettersApp(object):
 
 
 # connect to my multitech MTCBA-G-U-F4 modem,
-#  which requires more configuration than most
+# which requires more configuration than most
 gsm = GsmModem(
     port="/dev/ttyUSB0",
     baudrate=115200,
     xonxoff=1,
     rtscts=1)
+
+# all arguments to GsmModem.__init__ are optional,
+# and passed straight on to pySerial. for many
+# devices, this will be enough:
+#gsm = GsmModem(port="/dev/ttyUSB0")
 
 # start the demo app
 app = CountLettersApp(gsm)
