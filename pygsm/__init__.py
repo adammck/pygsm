@@ -3,3 +3,4 @@
 
 
 from gsmmodem import GsmModem
+__doc__ = GsmModem.__doc__

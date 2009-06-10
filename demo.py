@@ -3,7 +3,7 @@
 
 
 from pygsm import GsmModem
-import serial, time
+import time
 
 
 class CountLettersApp(object):
@@ -24,7 +24,7 @@ class CountLettersApp(object):
             # poll the modem
             msg = self.modem.next_message()
             if msg is not None:
-                print "Got Message: %s" % (msg)
+                print "Got Message: %r" % (msg)
                 self.incoming(msg)
             
             # no messages? wait a couple of seconds

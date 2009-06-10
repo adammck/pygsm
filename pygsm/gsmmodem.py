@@ -11,6 +11,54 @@ import serial
 
 
 class GsmModem(object):
+    """pyGSM is a Python module which uses pySerial to provide a nifty
+       interface to send and receive SMS via a GSM Modem. It was ported
+       from RubyGSM, and provides (almost) all of the same features. It's
+       easy to get started:
+       
+          # create a GsmModem object:
+          >>> import pygsm
+          >>> modem = pygsm.GsmModem(port="/dev/ttyUSB0")
+       
+          # harass Evan over SMS:
+          # (try to do this before 11AM)
+          >>> modem.send_sms("+13364130840", "Hey, wake up!")
+       
+          # check for incoming SMS:
+          >>> print modem.next_message()
+          <pygsm.IncomingMessage from +13364130840: "Leave me alone!">
+       
+       
+       There are various ways of polling for incoming messages -- a choice
+       which has been deliberately left to the application author (unlike
+       RubyGSM). Execute `python -m pygsm.gsmmodem` to run this example:
+       
+          # connect to the modem
+          modem = pygsm.GsmModem(port=sys.argv[1])
+          
+          # check for new messages every two
+          # seconds for the rest of forever
+          while True:
+              msg = modem.next_message()
+              
+              # we got a message! respond with
+              # something useless, as an example
+              if msg is not None:
+                  msg.respond("Thanks for those %d characters!" %
+                      len(msg.text))
+              
+              # no messages? wait a couple
+              # of seconds and try again
+              else: time.sleep(2)
+       
+       
+       pyGSM is distributed via GitHub:
+       http://github.com/adammck/pygsm
+       
+       Bugs reports (especially for
+       unsupported devices) are welcome:
+       http://github.com/adammck/pygsm/issues"""
+    
     
     # override these after init, and
     # before boot. they're not sanity
@@ -19,6 +67,12 @@ class GsmModem(object):
     
     
     def __init__(self, *args, **kwargs):
+        """Creates, connects to, and boots a GSM Modem. All of the arguments
+           are optional (although "port=" should almost always be provided),
+           and passed along to serial.Serial.__init__ verbatim. For all of
+           the possible configration options, see:
+           
+           http://pyserial.wiki.sourceforge.net/pySerial#tocpySerial10"""
         
         # store the connection args, since we might need
         # to recreate the serial connection again later
@@ -524,3 +578,37 @@ class GsmModem(object):
         # remove the message that has been waiting
         # longest from the queue, and return it
         return self.incoming_queue.pop(0)
+
+
+
+
+if __name__ == "__main__":
+    
+    import sys
+    if len(sys.argv) == 2:
+        
+        # connect to the modem
+        print "Connecting to modem..."
+        modem = GsmModem(port=sys.argv[1])
+        print "Waiting for incoming messages..."
+
+        # check for new messages every two
+        # seconds for the rest of forever
+        while True:
+            msg = modem.next_message()
+
+            # we got a message! respond with
+            # something useless, as an example
+            if msg is not None:
+                print "Got Message: %r" % msg
+                msg.respond("Thanks for those %d characters!" %
+                len(msg.text))
+
+            # no messages? wait a couple
+            # of seconds and try again
+            else: time.sleep(2)
+    
+    # the serial port must be provided
+    # we're not auto-detecting, yet
+    else:
+        print "Usage: python -m pygsm.gsmmodem PORT"
