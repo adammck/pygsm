@@ -224,6 +224,11 @@ class GsmModem(object):
 
 	
     def _parse_incoming_sms(self, lines):
+        """Parse a list of lines (the output of GsmModem._wait), to extract any
+           incoming SMS and append them to GsmModem.incoming_queue. Returns the
+           same lines with the incoming SMS removed. Other unsolicited data may
+           remain, which must be cropped separately."""
+        
         output_lines = []
         n = 0
         
@@ -369,6 +374,9 @@ class GsmModem(object):
            all AT commands that I've ever needed to use.
            
            For all other commands, returns None."""
+        
+        # issue the command, which might return incoming
+        # messages, but we'll leave them in the queue
         out = self.command(cmd)
 
         # the only valid response to a "query" is a
