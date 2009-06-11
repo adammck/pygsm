@@ -72,12 +72,28 @@ class GsmModem(object):
            and passed along to serial.Serial.__init__ verbatim. For all of
            the possible configration options, see:
            
-           http://pyserial.wiki.sourceforge.net/pySerial#tocpySerial10"""
+           http://pyserial.wiki.sourceforge.net/pySerial#tocpySerial10
+           
+           Alternatively, a single "device" kwarg can be passed, which overrides
+           the default proxy-args-to-pySerial behavior. This is useful when testing,
+           or wrapping the serial connection with some custom logic."""
         
-        # store the connection args, since we might need
-        # to recreate the serial connection again later
-        self.device_args = args
-        self.device_kwargs = kwargs
+        # if a ready-made device was provided, store it -- self.connect
+        # will see that we're already connected, and do nothing. we'll
+        # just assume it quacks like a serial port
+        if "device" in kwargs:
+            self.device = kwargs.pop("device")
+            
+            # if a device is given, the other args are never
+            # used, so were probably included by mistake.
+            if len(args) or len(kwargs):
+                raise(TypeError("__init__() does not accept other arguments when a 'device' is given"))
+            
+        # for regular serial connections, store the connection args, since
+        # we might need to recreate the serial connection again later
+        else:
+            self.device_args = args
+            self.device_kwargs = kwargs
         
         # to cache parts of multi-part messages
         # until the last part is delivered
