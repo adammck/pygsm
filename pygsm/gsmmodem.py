@@ -161,13 +161,17 @@ class GsmModem(object):
         
         # set some sensible defaults, to make
         # the various modems more consistant
-        self.command("ATE0")      # echo off
-        self.command("AT+CMEE=1") # useful error messages
-        self.command("AT+WIND=0") # disable notifications
-        self.command("AT+CMGF=1") # switch to TEXT mode
+        self.command("ATE0",      raise_errors=False) # echo off
+        self.command("AT+CMEE=1", raise_errors=False) # useful error messages
+        self.command("AT+WIND=0", raise_errors=False) # disable notifications
+        self.command("AT+CMGF=1"                    ) # switch to TEXT mode
         
         # enable new message notification
-        self.command("AT+CNMI=2,2,0,0,0")
+        # TODO: this is allowed to fail, but currently
+        # there is no way to receive messages without it
+        self.command(
+            "AT+CNMI=2,2,0,0,0",
+            raise_errors=False)
     
     
     def _write(self, str):
@@ -412,16 +416,28 @@ class GsmModem(object):
         return output_lines
 
 
-    def command(self, cmd, read_term=None, read_timeout=None, write_term="\r"):
+    def command(self, cmd, read_term=None, read_timeout=None, write_term="\r", raise_errors=True):
         """Issue a single AT command to the modem, and return the sanitized
            response. Sanitization removes status notifications, command echo,
            and incoming messages, (hopefully) leaving only the actual response
            from the command."""
         
-        self._write(cmd + write_term)
-        lines = self._wait(
-            read_term=read_term,
-            read_timeout=read_timeout)
+        try:
+            self._write(cmd + write_term)
+            lines = self._wait(
+                read_term=read_term,
+                read_timeout=read_timeout)
+        
+        # if the command caused an error,
+        # maybe wrap it and return None
+        except errors.GsmError, err:
+            if not raise_errors:
+                return None
+            
+            # otherwise, allow the error to propagate upwards
+            # to the app. TODO: this is dangerous! maybe it
+            # should be OFF as default?
+            raise(err)
         
         # if the first line of the response echoes the cmd
         # (it shouldn't, if ATE0 worked), silently drop it
