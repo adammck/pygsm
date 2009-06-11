@@ -64,7 +64,7 @@ class GsmModem(object):
     # before boot. they're not sanity
     # checked, so go crazy.
     cmd_delay = 0.1
-    
+    print_traffic = False
     
     def __init__(self, *args, **kwargs):
         """Creates, connects to, and boots a GSM Modem. All of the arguments
@@ -173,6 +173,8 @@ class GsmModem(object):
     def _write(self, str):
         """Write a string to the modem."""
         try:
+            if self.print_traffic:
+                print ">> %r" % str
             self.device.write(str)
         
         # if the device couldn't be written to,
@@ -220,8 +222,12 @@ class GsmModem(object):
             # if last n characters of the buffer match the read
             # terminator, return what we've received so far
             if buffer[-len(read_term)::] == list(read_term):
-                buf_str = "".join(buffer).strip()
+                buf_str = "".join(buffer)
                 __reset_timeout()
+                
+                if self.print_traffic:
+                    print "<< %r" % buf_str
+                
                 return buf_str
     
     
@@ -239,6 +245,7 @@ class GsmModem(object):
                 read_term=read_term,
                 read_timeout=read_timeout)
             
+            buf = buf.strip()
             buffer.append(buf)
             
             # most commands return OK for success, but there
