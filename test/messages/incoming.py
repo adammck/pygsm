@@ -16,9 +16,9 @@ class TestIncomingMessage(unittest.TestCase):
         out_text = "beta"
         
         
-        # this mock device does nothing, except note down
-        # the parameters which .send_sms is called with
-        class MockDevice(object):
+        # this mock pygsm.gsmmodem does nothing, except note
+        # down the parameters which .send_sms is called with
+        class MockGsmModem(object):
             def __init__(self):
                 self.sent_sms = []
             
@@ -28,17 +28,17 @@ class TestIncomingMessage(unittest.TestCase):
                     "text": text
                 })
         
-        mock_device = MockDevice()
+        mock_gsm = MockGsmModem()
         
         
         # simulate an incoming message, and a respond to it
-        msg = pygsm.message.IncomingMessage(mock_device, caller, None, in_text)
+        msg = pygsm.message.IncomingMessage(mock_gsm, caller, None, in_text)
         msg.respond(out_text)
         
         # check that MockDevice.send_sms was called with
         # the correct args by IncomingMessage.respond
-        self.assertEqual(mock_device.sent_sms[0]["recipient"], caller)
-        self.assertEqual(mock_device.sent_sms[0]["text"], out_text)
+        self.assertEqual(mock_gsm.sent_sms[0]["recipient"], caller)
+        self.assertEqual(mock_gsm.sent_sms[0]["text"], out_text)
 
 
 if __name__ == "__main__":
