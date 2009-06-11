@@ -92,11 +92,15 @@ class GsmModemError(GsmError):
 	        529: "PLMN selection failure. Emergency calls only",
 	        531: "SMS not send: the <da> is not in FDN phonebook, and FDN lock is enabled (for SMS)" }}
 	
-    def __init__(self, type, code):
+    def __init__(self, type=None, code=None):
         self.type = type
         self.code = code
     
     def __str__(self):
-        return "%s ERROR %d: %s" % (
-            self.type, self.code,
-            self.STRINGS[self.type][self.code])
+        if self.type and self.code:
+            return "%s ERROR %d: %s" % (
+                self.type, self.code,
+                self.STRINGS[self.type][self.code])
+        
+        # no type and/or code were provided
+        else: return "Unknown GSM Error"
