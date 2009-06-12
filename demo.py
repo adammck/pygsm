@@ -22,6 +22,7 @@ class CountLettersApp(object):
         while True:
             
             # poll the modem
+            print "Checking for message..."
             msg = self.modem.next_message()
             if msg is not None:
                 print "Got Message: %r" % (msg)
@@ -37,7 +38,7 @@ class CountLettersApp(object):
 gsm = GsmModem(
     port="/dev/ttyUSB0",
     baudrate=115200,
-    xonxoff=1,
+    xonxoff=0,
     rtscts=1)
 
 # all arguments to GsmModem.__init__ are optional,

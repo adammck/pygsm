@@ -4,6 +4,7 @@
 
 import re, datetime, time
 import errors, message
+import traceback
 
 # arch: pacman -S python-pyserial
 # debian: apt-get install pyserial
@@ -144,21 +145,10 @@ class GsmModem(object):
         # just isn't open yet
         return False
     
-    
-    def boot(self, reboot=False):
-        """Initializes the modem. Must be called after init and connect,
-           but before doing anything that expects the modem to be ready."""
-        
-        # first, ensure that we're
-        # connected to the modem
-        self.connect()
-        
-        # the safest way to boot the modem is to
-        # reset it first, but this is _hella slow_,
-        # so only do it if explicitly requested
-        if reboot:
-            self.command("AT+CFUN=1")
-        
+    def set_modem_config(self):
+        """initialize the modem configuration with settings needed to process
+           commands and send/receive SMS. 
+        """
         # set some sensible defaults, to make
         # the various modems more consistant
         self.command("ATE0",      raise_errors=False) # echo off
@@ -167,13 +157,32 @@ class GsmModem(object):
         self.command("AT+CMGF=1"                    ) # switch to TEXT mode
         
         # enable new message notification
-        # TODO: this is allowed to fail, but currently
-        # there is no way to receive messages without it
         self.command(
-            "AT+CNMI=2,2,0,0,0",
-            raise_errors=False)
-    
-    
+            "AT+CNMI=2,2,0,0,0")
+        
+    def boot(self, reboot=False):
+        """Initializes the modem. Must be called after init and connect,
+           but before doing anything that expects the modem to be ready."""
+
+        if reboot:
+            # If reboot==True, force a reconnection and full modem reset. SLOW
+            self.connect(reconnect=True)
+            self.command("AT+CFUN=0")
+            self.command("AT+CFUN=1")
+        else:
+            # else just verify connection
+            self.connect()
+
+        # In both cases, reset the modem's config
+        self.set_modem_config()        
+
+ 
+    def reboot(self):
+        """Forces a reconnect to the serial port and then a full modem reset to factory 
+           and reconnect to GSM network. SLOW.
+        """
+        self.boot(reboot=True)
+   
     def _write(self, str):
         """Write a string to the modem."""
         try:
@@ -269,8 +278,7 @@ class GsmModem(object):
             # ...some errors are not so useful
             # (at+cmee=1 should enable error codes)
             if buf == "ERROR":
-                raise(errors.GsmModemError)
-    
+                raise(errors.GsmModemError('UNK',0))
     
     SCTS_FMT = "%y/%m/%d,%H:%M:%S"
     
@@ -358,10 +366,9 @@ class GsmModem(object):
             try:
                 self.command("AT+CNMA")
 
-            # not terribly important if it
-            # fails, even though it shouldn't
+            # Some networks don't handle notification, in which case this
+            # fails. Not a big deal, so ignore.
             except errors.GsmError:
-                
                 #self.log("Receipt acknowledgement (CNMA) was rejected")
                 # TODO: also log this!
                 pass
@@ -416,19 +423,45 @@ class GsmModem(object):
         return output_lines
 
 
-    def command(self, cmd, read_term=None, read_timeout=None, write_term="\r", raise_errors=True):
+    def command(self, cmd, read_term=None, read_timeout=None, write_term="\r", \
+                    raise_errors=True, retry_515=True, max_retries=10, \
+                    retry_delay_secs=2, \
+                    retry_attempt=0):
         """Issue a single AT command to the modem, and return the sanitized
            response. Sanitization removes status notifications, command echo,
            and incoming messages, (hopefully) leaving only the actual response
-           from the command."""
-        
+           from the command.
+           
+           If 'retry_515' is True, retry when modem reports a 515 (not ready) error.
+           """
         try:
-            self._write(cmd + write_term)
-            lines = self._wait(
-                read_term=read_term,
-                read_timeout=read_timeout)
-        
-        # if the command caused an error,
+            try:
+                self._write(cmd + write_term)
+                lines = self._wait(
+                    read_term=read_term,
+                    read_timeout=read_timeout)
+                
+                
+            except errors.GsmModemError, modem_err:
+                if retry_515 and (modem_err.code is not None) \
+                        and modem_err.code==515 and \
+                        (retry_attempt<max_retries):
+                    print "modem not ready... wait..."
+                    time.sleep(retry_delay_secs)
+                    return self.command(cmd,read_term=read_term, \
+                                            read_timeout=read_timeout, \
+                                            write_term=write_term, \
+                                            raise_errors=raise_errors, \
+                                            retry_515=retry_515, \
+                                            max_retries=max_retries, \
+                                            retry_delay_secs=retry_delay_secs, \
+                                            retry_attempt=int(retry_attempt)+1)
+
+                # if haven't caught and entered retry recursion, raise to outer handler
+                raise modem_err
+
+
+        # Outer handler: if the command caused an error,
         # maybe wrap it and return None
         except errors.GsmError, err:
             if not raise_errors:
@@ -496,7 +529,7 @@ class GsmModem(object):
            and reassembled them upon delivery, but some will silently
            drop them. At the moment, pyGSM does nothing to avoid this,
            so try to keep _text_ under 160 characters."""
-        
+
         try:
             try:
             
@@ -504,10 +537,10 @@ class GsmModem(object):
                 # to raise an error. unfortunately, we can't just
                 # wait for the "> " prompt, because some modems
                 # will echo it FOLLOWED BY a CMS error
-                self.command(
+                result = self.command(
                     "AT+CMGS=\"%s\"\r" % (recipient),
                     read_timeout=1)
-            
+
             # if no error is raised within the timeout period,
             # and the text-mode prompt WAS received, send the
             # sms text, wait until it is accepted or rejected
@@ -521,7 +554,8 @@ class GsmModem(object):
                 # a timeout was raised, but no prompt nor
                 # error was received. i have no idea what
                 # is going on, so allow the error to propagate
-                else: raise
+                else:
+                    raise
         
         # for all other errors...
         # (likely CMS or CME from device)
