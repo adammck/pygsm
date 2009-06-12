@@ -5,11 +5,16 @@
 import re, datetime, time
 import errors, message
 import traceback
+import StringIO
 
 # arch: pacman -S python-pyserial
 # debian: apt-get install pyserial
 import serial
 
+# Constants
+CMGL_STATUS="REC UNREAD" 
+#CMGL_STATUS="REC READ" 
+CMGL_MATCHER=re.compile(r'^\+CMGL: (\d+),"(.+?)","(.+?)",*?,"(.+?)".*?$')
 
 class GsmModem(object):
     """pyGSM is a Python module which uses pySerial to provide a nifty
@@ -167,7 +172,6 @@ class GsmModem(object):
         if reboot:
             # If reboot==True, force a reconnection and full modem reset. SLOW
             self.connect(reconnect=True)
-            self.command("AT+CFUN=0")
             self.command("AT+CFUN=1")
         else:
             # else just verify connection
@@ -176,6 +180,9 @@ class GsmModem(object):
         # In both cases, reset the modem's config
         self.set_modem_config()        
 
+        # And check for any waiting messages PRIOR to setting
+        # the CNMI call 
+        self._fetch_stored_messages()
  
     def reboot(self):
         """Forces a reconnect to the serial port and then a full modem reset to factory 
@@ -224,7 +231,7 @@ class GsmModem(object):
         while(True):
             buf = self.device.read()
             buffer.append(buf)
-            
+
             # if a timeout was hit, raise an exception including the raw data that
             # we've already read (in case the calling func was _expecting_ a timeout
             # (wouldn't it be nice if serial.Serial.read returned None for this?)
@@ -406,10 +413,8 @@ class GsmModem(object):
                 # store the incoming data to be picked up
                 # from the attr_accessor as a tuple (this
                 # is kind of ghetto, and WILL change later)
-                sent = self._parse_incoming_timestamp(timestamp)
-                msg = message.IncomingMessage(self, sender, sent, text)
-                self.incoming_queue.append(msg)
-                
+                self._add_to_incoming_q(timestamp,sender,text)
+
                 # don't loop! the only reason that this
                 # "while" exists is to jump out early
                 break
@@ -422,6 +427,10 @@ class GsmModem(object):
         # interested in (almost all of them!)
         return output_lines
 
+    def _add_to_incoming_q(self,unparsed_timestamp,sender,text):
+        time_sent = self._parse_incoming_timestamp(unparsed_timestamp)
+        msg = message.IncomingMessage(self, sender, time_sent, text)
+        self.incoming_queue.append(msg)
 
     def command(self, cmd, read_term=None, read_timeout=None, write_term="\r", \
                     raise_errors=True, retry_515=True, max_retries=10, \
@@ -446,7 +455,6 @@ class GsmModem(object):
                 if retry_515 and (modem_err.code is not None) \
                         and modem_err.code==515 and \
                         (retry_attempt<max_retries):
-                    print "modem not ready... wait..."
                     time.sleep(retry_delay_secs)
                     return self.command(cmd,read_term=read_term, \
                                             read_timeout=read_timeout, \
@@ -474,6 +482,7 @@ class GsmModem(object):
         
         # if the first line of the response echoes the cmd
         # (it shouldn't, if ATE0 worked), silently drop it
+
         if lines[0] == cmd:
             lines.pop(0)
         
@@ -496,7 +505,7 @@ class GsmModem(object):
         # rest up for a bit (modems are
         # slow, and get confused easily)
         time.sleep(self.cmd_delay)
-        
+
         return lines
     
     
@@ -631,7 +640,59 @@ class GsmModem(object):
         except errors.GsmError:
             return None
 
-    
+        
+    def _strip_ok(self,lines):
+        """Strip 'OK' from end of command response"""
+        if lines is not None and len(lines)>0 and \
+                lines[-1]=='OK':
+            lines=lines[:-1] # strip last entry
+        return lines
+
+    def _fetch_stored_messages(self):
+        """Fetch stored messages with CMGL and add to incoming queue
+           Return number fetched"""
+
+        lines = self._strip_ok(self.command('AT+CMGL="%s"' % CMGL_STATUS))
+        # loop through all the lines attempting to match CMGL lines (the header)
+        # and then match NOT CMGL lines (the content)
+        # need to seed the loop first
+        num_found=0
+        if len(lines)>0:
+            m=CMGL_MATCHER.match(lines[0])
+
+        while len(lines)>0:    
+            if m is None:
+                # couldn't match OR no text data following match
+                raise(errors.GsmReadError())
+
+            # if here, we have a match AND text 
+            # start by popping the header (which we have stored in the 'm' 
+            # matcher object already)
+            lines.pop(0)
+
+            # now put the captures into independent vars
+            index, status, sender, timestamp = m.groups()
+            
+            # now loop through, popping content until we get 
+            # the next CMGL or out of lines
+            msg_buf=StringIO.StringIO()
+            while len(lines)>0:
+                m=CMGL_MATCHER.match(lines[0])
+                if m is not None:
+                    # got another header, get out
+                    break
+                else:
+                    msg_buf.write(lines.pop(0))
+
+            # get msg text
+            msg_text=msg_buf.getvalue().strip() 
+
+            # now create message
+            self._add_to_incoming_q(timestamp,sender,msg_text)
+            num_found+=1
+
+        return num_found
+
     def next_message(self, fetch=True):
         """Returns the next waiting IncomingMessage object, or None if
            the queue is empty. The optional _fetch_ parameter controls
@@ -642,8 +703,9 @@ class GsmModem(object):
         # to deliver any waiting messages (TODO: fetch
         # from SIM and device storage, like RubyGSM)
         if fetch:
-            self.ping()
-        
+            # ping for any new, unstored
+            self.ping()    
+            
         # abort if there are no messages waiting
         if not self.incoming_queue:
             return None
@@ -661,8 +723,8 @@ if __name__ == "__main__":
     if len(sys.argv) == 2:
         
         # connect to the modem
-        print "Connecting to modem..."
-        modem = GsmModem(port=sys.argv[1])
+        print "Connecting to modem: %s..." % sys.argv[1]
+        modem = GsmModem(port=sys.argv[1],rtscts=1,baudrate=115200)
         print "Waiting for incoming messages..."
 
         # check for new messages every two
@@ -675,7 +737,7 @@ if __name__ == "__main__":
             if msg is not None:
                 print "Got Message: %r" % msg
                 msg.respond("Thanks for those %d characters!" %
-                len(msg.text))
+                            len(msg.text))
 
             # no messages? wait a couple
             # of seconds and try again
