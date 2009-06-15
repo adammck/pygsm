@@ -180,10 +180,6 @@ class GsmModem(object):
         # In both cases, reset the modem's config
         self.set_modem_config()        
 
-        # And check for any waiting messages PRIOR to setting
-        # the CNMI call 
-        self._fetch_stored_messages()
- 
     def reboot(self):
         """Forces a reconnect to the serial port and then a full modem reset to factory 
            and reconnect to GSM network. SLOW.
@@ -693,23 +689,30 @@ class GsmModem(object):
 
         return num_found
 
-    def next_message(self, fetch=True):
-        """Returns the next waiting IncomingMessage object, or None if
-           the queue is empty. The optional _fetch_ parameter controls
-           whether the modem is polled before checking, which can be
-           disabled in case you're polling in a separate thread."""
-        
-        # optionally ping the modem, to give it the chance
-        # to deliver any waiting messages (TODO: fetch
-        # from SIM and device storage, like RubyGSM)
+
+    def next_message(self, ping=True, fetch=True):
+        """Returns the next waiting IncomingMessage object, or None if the
+           queue is empty. The optional _ping_ and _fetch_ parameters control
+           whether the modem is pinged (to allow new messages to be delivered
+           instantly, on those modems which support it) and queried for unread
+           messages in storage, which can both be disabled in case you're
+           already polling in a separate thread."""
+
+        # optionally ping the modem, to give it a
+        # chance to deliver any waiting messages
+        if ping:
+            self.ping()
+
+        # optionally check the storage for unread messages.
+        # we must do this just as often as ping, because most
+        # handsets don't support CNMI-style delivery
         if fetch:
-            # ping for any new, unstored
-            self.ping()    
-            
+            self._fetch_stored_messages()
+
         # abort if there are no messages waiting
         if not self.incoming_queue:
             return None
-        
+
         # remove the message that has been waiting
         # longest from the queue, and return it
         return self.incoming_queue.pop(0)
