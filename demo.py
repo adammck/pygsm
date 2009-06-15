@@ -9,25 +9,25 @@ import time
 class CountLettersApp(object):
     def __init__(self, modem):
         self.modem = modem
-    
+
     def incoming(self, msg):
         msg.respond("Thanks for those %d characters!" %\
             len(msg.text))
-    
+
     def serve_forever(self):
         """Block forever, polling the modem for new messages every
            two seconds. When a message is received, pass it on to
            the _incoming_ message for handling."""
-        
+
         while True:
-            
+
             # poll the modem
             print "Checking for message..."
             msg = self.modem.next_message()
             if msg is not None:
                 print "Got Message: %r" % (msg)
                 self.incoming(msg)
-            
+
             # no messages? wait a couple of seconds
             # (let's not blow up the modem), and retry
             time.sleep(2)
