@@ -164,7 +164,8 @@ class GsmModem(object):
 
         # enable new message notification
         self.command(
-            "AT+CNMI=2,2,0,0,0")
+            "AT+CNMI=2,2,0,0,0",
+            raise_errors=False)
 
 
     def boot(self, reboot=False):
