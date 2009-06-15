@@ -34,10 +34,17 @@ class TestIncomingMessage(unittest.TestCase):
                 MockDevice.__init__(self)
                 self.useful_errors = False
 
-            def process(self, cmd):
-                if cmd == "AT+CMEE=1":
-                    self.useful_errors = True
+            def at_cmee(self, error_mode):
+                if error_mode == "1":
+                    self.useful_errors = True 
                     return True
+
+                elif error_mode == "0":
+                    self.useful_errors = False
+                    return True
+
+                # invalid mode
+                return False
 
         device = MockUsefulErrorsDevice()
         gsm = pygsm.GsmModem(device=device)
