@@ -21,7 +21,7 @@ class TestIncomingMessage(unittest.TestCase):
 
         device = MockEchoDevice()
         gsm = pygsm.GsmModem(device=device)
-        self.assetEqual(device.echo, False)
+        self.assertEqual(device.echo, False)
 
 
     def testUsefulErrors(self):
@@ -41,7 +41,7 @@ class TestIncomingMessage(unittest.TestCase):
 
         device = MockUsefulErrorsDevice()
         gsm = pygsm.GsmModem(device=device)
-        self.assetEqual(device.useful_errors, True)
+        self.assertEqual(device.useful_errors, True)
 
 
 if __name__ == "__main__":

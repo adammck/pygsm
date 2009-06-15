@@ -2,12 +2,13 @@
 # vim: ai ts=4 sts=4 et sw=4
 
 
-import time
+import time, re
 
 
 class MockDevice(object):
 
     print_traffic = False
+    mode = "PDU" # or TEXT
     echo = True
 
 
@@ -85,6 +86,22 @@ class MockDevice(object):
         # even though a modem never would
         cmd = cmd.strip()
 
+        # if this command looks like an AT+SOMETHING=VAL string (which most
+        # do), check for an at_something method to handle the command. this
+        # is bad, since mock modems should handle as little as possible (and
+        # return ERROR for everything else), but some commands are _required_
+        # (AT+CMGF=1 # switch to text mode) for anything to work.
+        m = re.match(r"^AT\+([A-Z]+)=(.+)$", cmd)
+        if m is not None:
+            key, val = m.groups()
+            method = "at_%s" % key.lower()
+
+            # call the method, and insert OK or ERROR into the
+            # read buffer depending on the True/False output
+            if hasattr(self, method):
+                ok = getattr(self, method)(val)
+                return self._ok() if ok else self._error()
+
         # attempt to hand off this
         # command to the subclass
         if hasattr(self, "process"):
@@ -97,6 +114,23 @@ class MockDevice(object):
         return self._error()
 
 
+    def at_cmgf(self, mode):
+        """Switches this "modem" into PDU mode (0) or TEXT mode (1).
+           Returns True for success, or False for unrecognized modes."""
+        
+        if mode == "0":
+            self.mode = "PDU"
+            return True
+        
+        elif mode == "1":
+            self.mode = "TEXT"
+            return True
+        
+        else:
+            self.mode = None
+            return False
+    
+    
     def _output(self, str):
         """Insert a GSM response into the read buffer, with leading and
            trailing terminators (\r\n). This spews whitespace everywhere,
