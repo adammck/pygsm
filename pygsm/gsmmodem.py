@@ -719,12 +719,32 @@ class GsmModem(object):
 
 if __name__ == "__main__":
     
-    import sys
-    if len(sys.argv) == 2:
-        
-        # connect to the modem
-        print "Connecting to modem: %s..." % sys.argv[1]
-        modem = GsmModem(port=sys.argv[1],rtscts=1,baudrate=115200)
+    import sys, re
+    if len(sys.argv) >= 2:
+
+        # the first argument is SERIAL PORT
+        # (required, since we have no autodetect yet)
+        port = sys.argv[1]
+
+        # all subsequent options are parsed as key=value
+        # pairs, to be passed on to GsmModem.__init__ as
+        # kwargs, to configure the serial connection
+        conf = dict([
+            arg.split("=", 1)
+            for arg in sys.argv[2:]
+            if arg.find("=") > -1
+        ])
+
+        # dump the connection settings
+        print "pyGSM Demo App"
+        print "  Port: %s" % (port)
+        print "  Config: %r" % (conf)
+        print
+
+        # connect to the modem (this might hang
+        # if the connection settings are wrong)
+        print "Connecting to GSM Modem..."
+        modem = GsmModem(port=port, **conf)
         print "Waiting for incoming messages..."
 
         # check for new messages every two
@@ -737,7 +757,7 @@ if __name__ == "__main__":
             if msg is not None:
                 print "Got Message: %r" % msg
                 msg.respond("Thanks for those %d characters!" %
-                            len(msg.text))
+                    len(msg.text))
 
             # no messages? wait a couple
             # of seconds and try again
@@ -746,4 +766,4 @@ if __name__ == "__main__":
     # the serial port must be provided
     # we're not auto-detecting, yet
     else:
-        print "Usage: python -m pygsm.gsmmodem PORT"
+        print "Usage: python -m pygsm.gsmmodem PORT [OPTIONS]"
