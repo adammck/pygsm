@@ -90,10 +90,7 @@ class GsmModemError(GsmError):
             527: "Please wait, RR or MM is busy. Retry your selection later",
             528: "Location update failure. Emergency calls only",
             529: "PLMN selection failure. Emergency calls only",
-            531: "SMS not send: the <da> is not in FDN phonebook, and FDN lock is enabled (for SMS)" },
-        "UNK": {
-            0: "Unknown error returned by modem"
-            }}
+            531: "SMS not send: the <da> is not in FDN phonebook, and FDN lock is enabled (for SMS)" }}
 	
     def __init__(self, type=None, code=None):
         self.type = type

@@ -285,7 +285,7 @@ class GsmModem(object):
             # ...some errors are not so useful
             # (at+cmee=1 should enable error codes)
             if buf == "ERROR":
-                raise(errors.GsmModemError('UNK',0))
+                raise(errors.GsmModemError)
     
     SCTS_FMT = "%y/%m/%d,%H:%M:%S"
     
