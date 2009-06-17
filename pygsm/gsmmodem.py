@@ -2,18 +2,20 @@
 # vim: ai ts=4 sts=4 et sw=4
 
 
+from __future__ import with_statement
+
 import re, datetime, time
 import errors, message
 import traceback
 import StringIO
+import threading
 
 # arch: pacman -S python-pyserial
 # debian: apt-get install pyserial
 import serial
 
 # Constants
-CMGL_STATUS="REC UNREAD"
-#CMGL_STATUS="REC READ"
+CMGL_STATUS="REC UNREAD" 
 CMGL_MATCHER=re.compile(r'^\+CMGL: (\d+),"(.+?)","(.+?)",*?,"(.+?)".*?$')
 
 class GsmModem(object):
@@ -71,6 +73,7 @@ class GsmModem(object):
     # checked, so go crazy.
     cmd_delay = 0.1
     print_traffic = False
+    modem_lock=threading.RLock()
 
     def __init__(self, *args, **kwargs):
         """Creates, connects to, and boots a GSM Modem. All of the arguments
@@ -120,10 +123,11 @@ class GsmModem(object):
         # if no connection exists, create it
         # the reconnect flag is irrelevant
         if not hasattr(self, "device") or (self.device is None):
-            self.device = serial.Serial(
-                *self.device_args,
-                **self.device_kwargs)
-
+            with self.modem_lock:
+                self.device = serial.Serial(
+                    *self.device_args,
+                     **self.device_kwargs)
+                
         # the port already exists, but if we're
         # reconnecting, then kill it and recurse
         # to recreate it. this is useful when the
@@ -140,11 +144,12 @@ class GsmModem(object):
 
         # attempt to close and destroy the device
         if hasattr(self, "device") and (self.device is None):
-            if self.device.isOpen():
-                self.device.close()
-                self.device = None
-                return True
-
+            with self.modem_lock:
+                if self.device.isOpen():
+                    self.device.close()
+                    self.device = None
+                    return True
+        
         # for some reason, the device
         # couldn't be closed. it probably
         # just isn't open yet
@@ -160,6 +165,7 @@ class GsmModem(object):
         self.command("ATE0",      raise_errors=False) # echo off
         self.command("AT+CMEE=1", raise_errors=False) # useful error messages
         self.command("AT+WIND=0", raise_errors=False) # disable notifications
+        self.command('AT+CSCS="HEX"'                ) # make sure text comes raw HEX encoded
         self.command("AT+CMGF=1"                    ) # switch to TEXT mode
 
         # enable new message notification
@@ -181,23 +187,30 @@ class GsmModem(object):
             self.connect()
 
         # In both cases, reset the modem's config
-        self.set_modem_config()
+        self.set_modem_config()        
 
-
+        # And check for any waiting messages PRIOR to setting
+        # the CNMI call--this is not supported by all modems--
+        # in which case we catch the exception and plow onward
+        try:
+            self._fetch_stored_messages()
+        except errors.GsmError:
+            pass
+ 
     def reboot(self):
         """Forces a reconnect to the serial port and then a full modem reset to factory
            and reconnect to GSM network. SLOW.
         """
         self.boot(reboot=True)
 
-
     def _write(self, str):
         """Write a string to the modem."""
         try:
             if self.print_traffic:
                 print ">> %r" % str
-            self.device.write(str)
-
+            with self.modem_lock:
+                self.device.write(str)
+        
         # if the device couldn't be written to,
         # wrap the error in something that can
         # sensibly be caught at a higher level
@@ -228,30 +241,31 @@ class GsmModem(object):
         # until a newline is hit
         if not read_term:
             read_term = "\r\n"
+        
+        with self.modem_lock:
+            while(True):
+                buf = self.device.read()
+                buffer.append(buf)
 
-        while(True):
-            buf = self.device.read()
-            buffer.append(buf)
-
-            # if a timeout was hit, raise an exception including the raw data that
-            # we've already read (in case the calling func was _expecting_ a timeout
-            # (wouldn't it be nice if serial.Serial.read returned None for this?)
-            if buf == "":
-                __reset_timeout()
-                raise(errors.GsmReadTimeoutError(buffer))
-
-            # if last n characters of the buffer match the read
-            # terminator, return what we've received so far
-            if buffer[-len(read_term)::] == list(read_term):
-                buf_str = "".join(buffer)
-                __reset_timeout()
-
-                if self.print_traffic:
-                    print "<< %r" % buf_str
-
-                return buf_str
-
-
+                # if a timeout was hit, raise an exception including the raw data that
+                # we've already read (in case the calling func was _expecting_ a timeout
+                # (wouldn't it be nice if serial.Serial.read returned None for this?)
+                if buf == "":
+                    __reset_timeout()
+                    raise(errors.GsmReadTimeoutError(buffer))
+            
+                # if last n characters of the buffer match the read
+                # terminator, return what we've received so far
+                if buffer[-len(read_term)::] == list(read_term):
+                    buf_str = "".join(buffer)
+                    __reset_timeout()
+                
+                    if self.print_traffic:
+                        print "<< %r" % buf_str
+                
+                    return buf_str
+    
+    
     def _wait(self, read_term=None, read_timeout=None):
         """Read from the modem (blocking) one line at a time until a response
            terminator ("OK", "ERROR", or "CMx ERROR...") is hit, then return
@@ -327,6 +341,11 @@ class GsmModem(object):
         except ValueError:
             return None
 
+    def _hex_to_unicode(self,htext):
+        return htext.decode('hex').decode('raw_unicode_escape')
+
+    def _unicode_to_hex(self,utext):
+        return utext.encode('raw_unicode_escape').encode('hex')
 
     def _parse_incoming_sms(self, lines):
         """Parse a list of lines (the output of GsmModem._wait), to extract any
@@ -429,12 +448,11 @@ class GsmModem(object):
         # interested in (almost all of them!)
         return output_lines
 
-
-    def _add_to_incoming_q(self,unparsed_timestamp,sender,text):
+    def _add_to_incoming_q(self,unparsed_timestamp,sender,hex_text):
         time_sent = self._parse_incoming_timestamp(unparsed_timestamp)
-        msg = message.IncomingMessage(self, sender, time_sent, text)
+        unicode_text = self._hex_to_unicode(hex_text)
+        msg = message.IncomingMessage(self, sender, time_sent, unicode_text)
         self.incoming_queue.append(msg)
-
 
     def command(self, cmd, read_term=None, read_timeout=None, write_term="\r", \
                     raise_errors=True, retry_515=True, max_retries=10, \
@@ -542,7 +560,7 @@ class GsmModem(object):
            and reassembled them upon delivery, but some will silently
            drop them. At the moment, pyGSM does nothing to avoid this,
            so try to keep _text_ under 160 characters."""
-
+        text=self._unicode_to_hex(text)
         try:
             try:
 

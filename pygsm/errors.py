@@ -61,6 +61,7 @@ class GsmModemError(GsmError):
             149: "PDP authentication failure",
             150: "Invalid mobile class" },
         "CMS": {
+            021: "Call Rejected (out of credit?)",
             301: "SMS service of ME reserved",
             302: "Operation not allowed",
             303: "Operation not supported",
