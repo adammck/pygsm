@@ -343,11 +343,6 @@ class GsmModem(object):
         except ValueError:
             return None
 
-    def _hex_to_unicode(self,htext):
-        return htext.decode('hex').decode('raw_unicode_escape')
-
-    def _unicode_to_hex(self,utext):
-        return utext.encode('raw_unicode_escape').encode('hex')
 
     def _parse_incoming_sms(self, lines):
         """Parse a list of lines (the output of GsmModem._wait), to extract any
@@ -436,7 +431,7 @@ class GsmModem(object):
                 # store the incoming data to be picked up
                 # from the attr_accessor as a tuple (this
                 # is kind of ghetto, and WILL change later)
-                self._add_to_incoming_q(timestamp,sender,text)
+                self._add_incoming(timestamp, sender, text)
 
                 # don't loop! the only reason that this
                 # "while" exists is to jump out early
@@ -451,11 +446,35 @@ class GsmModem(object):
         return output_lines
 
 
-    def _add_to_incoming_q(self,unparsed_timestamp,sender,hex_text):
-        time_sent = self._parse_incoming_timestamp(unparsed_timestamp)
-        unicode_text = self._hex_to_unicode(hex_text)
-        msg = message.IncomingMessage(self, sender, time_sent, unicode_text)
+    def _add_incoming(self, timestamp, sender, text):
+
+        # since neither message notifications nor messages
+        # fetched from storage give any indication of their
+        # encoding, we're going to have to guess. if the
+        # text has a multiple-of-four length and starts
+        # with a UTF-16 Byte Order Mark, try to decode it
+        # into a unicode string
+        try:
+            if (len(text) % 4 == 0) and (len(text) > 0):
+                bom = text[:4].lower()
+                if bom == "fffe"\
+                or bom == "feff":
+                    
+                    # decode the text into a unicode string,
+                    # so developers embedding pyGSM need never
+                    # experience this confusion and pain
+                    text = text.decode("hex").decode("utf-16")
+
+        # oh dear. it looked like hex-encoded utf-16,
+        # but wasn't. who sends a message like that?!
+        except:
+            pass
+
+        # create and store the IncomingMessage object
+        time_sent = self._parse_incoming_timestamp(timestamp)
+        msg = message.IncomingMessage(self, sender, time_sent, text)
         self.incoming_queue.append(msg)
+        return msg
 
 
     def command(self, cmd, read_term=None, read_timeout=None, write_term="\r", raise_errors=True):
@@ -535,7 +554,7 @@ class GsmModem(object):
         return lines
 
 
-    def query(self, cmd):
+    def query(self, cmd, prefix=None):
         """Issues a single AT command to the modem, and returns the relevant
            part of the response. This only works for commands that return a
            single line followed by "OK", but conveniently, this covers almost
@@ -551,7 +570,15 @@ class GsmModem(object):
         # single line followed by "OK". if all looks
         # well, return just the single line
         if(len(out) == 2) and (out[-1] == "OK"):
-            return out[0]
+            if prefix is None:
+                return out[0].strip()
+
+            # if a prefix was provided, check that the
+            # response starts with it, and return the
+            # cropped remainder
+            else:
+                if out[0][:len(prefix)] == prefix:
+                    return out[0][len(prefix):].strip()
 
         # something went wrong, so return the very
         # ambiguous None. it's better than blowing up
@@ -565,9 +592,31 @@ class GsmModem(object):
            drop them. At the moment, pyGSM does nothing to avoid this,
            so try to keep _text_ under 160 characters."""
 
+        old_mode = None
         with self.modem_lock:
             try:
                 try:
+                    # cast the text to a string, to check that
+                    # it doesn't contain non-ascii characters
+                    try:
+                        text = str(text)
+
+                    # uh-oh. unicode ahoy
+                    except UnicodeEncodeError:
+
+                        # fetch and store the current mode (so we can
+                        # restore it later), and override it with UCS2
+                        csmp = self.query("AT+CSMP?", "+CSMP:")
+                        if csmp is not None:
+                            old_mode = csmp.split(",")
+                            mode = old_mode[:]
+                            mode[3] = "8"
+
+                            # enable hex mode, and set the encoding
+                            # to UCS2 for the full character set
+                            self.command('AT+CSCS="HEX"')
+                            self.command("AT+CSMP=%s" % ",".join(mode))
+                            text = text.encode("utf-16").encode("hex")
 
                     # initiate the sms, and give the device a second
                     # to raise an error. unfortunately, we can't just
@@ -617,6 +666,14 @@ class GsmModem(object):
                 # (obviously, this sucks. there should be an
                 # option, at least, but i'm being cautious)
                 return None
+
+            finally:
+
+                # if the mode was overridden above, (if this
+                # message contained unicode), switch it back
+                if old_mode is not None:
+                    self.command("AT+CSMP=%s" % ",".join(old_mode))
+                    self.command('AT+CSCS="GSM"')
 
 
     def hardware(self):
@@ -726,7 +783,7 @@ class GsmModem(object):
             msg_text=msg_buf.getvalue().strip()
 
             # now create message
-            self._add_to_incoming_q(timestamp,sender,msg_text)
+            self._add_incoming(timestamp,sender,msg_text)
             num_found+=1
 
         return num_found
