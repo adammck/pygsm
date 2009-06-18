@@ -95,10 +95,25 @@ class MockDevice(object):
 
         self._debug("CMD: %r" % (cmd))
 
+        def _respond(out):
+            """Given the output from a command-handling function,
+               injects a status line into the read buffer, to avoid
+               repeating it in every handler."""
+            
+            # boolean values result in OK or ERROR
+            # being injected into the read buffer
+            if   out == True:  return self._ok()
+            elif out == False: return self._error()
+
+            # for any other return value, leave the
+            # read buffer alone (we'll assume that
+            # the method has injected its own output)
+            else: return None
+
         # we can probably ignore whitespace,
         # even though a modem never would
         cmd = cmd.strip()
-
+        
         # if this command looks like an AT+SOMETHING=VAL string (which most
         # do), check for an at_something method to handle the command. this
         # is bad, since mock modems should handle as little as possible (and
@@ -117,25 +132,13 @@ class MockDevice(object):
             # read buffer depending on the True/False output
             if hasattr(self, method):
                 out = getattr(self, method)(val)
-
-                # True == OK
-                if out == True:
-                    return self._ok()
-
-                # False == ERROR
-                elif out == False:
-                    return self._error()
-
-                # for any other return value, leave the
-                # read buffer alone (we'll assume that
-                # the method has injected its own output)
-                else: return None
+                return _respond(out)
 
         # attempt to hand off this
         # command to the subclass
         if hasattr(self, "process"):
-            if self.process(cmd):
-                return self._ok()
+            out = self.process(cmd)
+            return _respond(out)
 
         # this modem has no "process" method,
         # or it was called and failed. either

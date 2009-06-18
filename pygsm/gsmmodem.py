@@ -72,8 +72,11 @@ class GsmModem(object):
     # before boot. they're not sanity
     # checked, so go crazy.
     cmd_delay = 0.1
+    retry_delay = 2
+    max_retries = 10
     print_traffic = False
     modem_lock=threading.RLock()
+
 
     def __init__(self, *args, **kwargs):
         """Creates, connects to, and boots a GSM Modem. All of the arguments
@@ -208,8 +211,8 @@ class GsmModem(object):
         try:
             if self.print_traffic:
                 print ">> %r" % str
-            with self.modem_lock:
-                self.device.write(str)
+            
+            self.device.write(str)
         
         # if the device couldn't be written to,
         # wrap the error in something that can
@@ -242,28 +245,27 @@ class GsmModem(object):
         if not read_term:
             read_term = "\r\n"
         
-        with self.modem_lock:
-            while(True):
-                buf = self.device.read()
-                buffer.append(buf)
+        while(True):
+            buf = self.device.read()
+            buffer.append(buf)
 
-                # if a timeout was hit, raise an exception including the raw data that
-                # we've already read (in case the calling func was _expecting_ a timeout
-                # (wouldn't it be nice if serial.Serial.read returned None for this?)
-                if buf == "":
-                    __reset_timeout()
-                    raise(errors.GsmReadTimeoutError(buffer))
+            # if a timeout was hit, raise an exception including the raw data that
+            # we've already read (in case the calling func was _expecting_ a timeout
+            # (wouldn't it be nice if serial.Serial.read returned None for this?)
+            if buf == "":
+                __reset_timeout()
+                raise(errors.GsmReadTimeoutError(buffer))
+        
+            # if last n characters of the buffer match the read
+            # terminator, return what we've received so far
+            if buffer[-len(read_term)::] == list(read_term):
+                buf_str = "".join(buffer)
+                __reset_timeout()
             
-                # if last n characters of the buffer match the read
-                # terminator, return what we've received so far
-                if buffer[-len(read_term)::] == list(read_term):
-                    buf_str = "".join(buffer)
-                    __reset_timeout()
-                
-                    if self.print_traffic:
-                        print "<< %r" % buf_str
-                
-                    return buf_str
+                if self.print_traffic:
+                    print "<< %r" % buf_str
+            
+                return buf_str
     
     
     def _wait(self, read_term=None, read_timeout=None):
@@ -448,63 +450,65 @@ class GsmModem(object):
         # interested in (almost all of them!)
         return output_lines
 
+
     def _add_to_incoming_q(self,unparsed_timestamp,sender,hex_text):
         time_sent = self._parse_incoming_timestamp(unparsed_timestamp)
         unicode_text = self._hex_to_unicode(hex_text)
         msg = message.IncomingMessage(self, sender, time_sent, unicode_text)
         self.incoming_queue.append(msg)
 
-    def command(self, cmd, read_term=None, read_timeout=None, write_term="\r", \
-                    raise_errors=True, retry_515=True, max_retries=10, \
-                    retry_delay_secs=2, \
-                    retry_attempt=0):
+
+    def command(self, cmd, read_term=None, read_timeout=None, write_term="\r", raise_errors=True):
         """Issue a single AT command to the modem, and return the sanitized
            response. Sanitization removes status notifications, command echo,
            and incoming messages, (hopefully) leaving only the actual response
            from the command.
+           
+           If Error 515 (init or command in progress) is returned, the command
+           is automatically retried up to _GsmModem.max_retries_ times."""
 
-           If 'retry_515' is True, retry when modem reports a 515 (not ready) error.
-           """
-        try:
+        # keep looping until the command
+        # succeeds or we hit the limit
+        retries = 0
+        while retries < self.max_retries:
             try:
-                self._write(cmd + write_term)
-                lines = self._wait(
-                    read_term=read_term,
-                    read_timeout=read_timeout)
 
+                # issue the command, and wait for the
+                # response
+                with self.modem_lock:
+                    self._write(cmd + write_term)
+                    lines = self._wait(
+                        read_term=read_term,
+                        read_timeout=read_timeout)
 
-            except errors.GsmModemError, modem_err:
-                if retry_515 and (modem_err.code is not None) \
-                        and modem_err.code==515 and \
-                        (retry_attempt<max_retries):
-                    time.sleep(retry_delay_secs)
-                    return self.command(cmd,read_term=read_term, \
-                                            read_timeout=read_timeout, \
-                                            write_term=write_term, \
-                                            raise_errors=raise_errors, \
-                                            retry_515=retry_515, \
-                                            max_retries=max_retries, \
-                                            retry_delay_secs=retry_delay_secs, \
-                                            retry_attempt=int(retry_attempt)+1)
+                # no exception was raised, so break
+                # out of the enclosing WHILE loop
+                break
 
-                # if haven't caught and entered retry recursion, raise to outer handler
-                raise modem_err
+            # Outer handler: if the command caused an error,
+            # maybe wrap it and return None
+            except errors.GsmError, err:
 
+                # if GSM Error 515 (init or command in progress) was raised,
+                # lock the thread for a short while, and retry. don't lock
+                # the modem while we're waiting, because most commands WILL
+                # work during the init period - just not _cmd_
+                if getattr(err, "code", None) == 515:
+                    time.sleep(self.retry_delay)
+                    retries += 1
+                    continue
 
-        # Outer handler: if the command caused an error,
-        # maybe wrap it and return None
-        except errors.GsmError, err:
-            if not raise_errors:
-                return None
+                # if raise_errors is disabled, it doesn't matter
+                # *what* went wrong - we'll just ignore it
+                if not raise_errors:
+                    return None
 
-            # otherwise, allow the error to propagate upwards
-            # to the app. TODO: this is dangerous! maybe it
-            # should be OFF as default?
-            raise(err)
+                # otherwise, allow errors to propagate upwards,
+                # and hope someone is waiting to catch them
+                else: raise(err)
 
         # if the first line of the response echoes the cmd
         # (it shouldn't, if ATE0 worked), silently drop it
-
         if lines[0] == cmd:
             lines.pop(0)
 
