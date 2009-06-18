@@ -163,12 +163,12 @@ class GsmModem(object):
         """initialize the modem configuration with settings needed to process
            commands and send/receive SMS.
         """
+        
         # set some sensible defaults, to make
         # the various modems more consistant
         self.command("ATE0",      raise_errors=False) # echo off
         self.command("AT+CMEE=1", raise_errors=False) # useful error messages
         self.command("AT+WIND=0", raise_errors=False) # disable notifications
-        self.command('AT+CSCS="HEX"'                ) # make sure text comes raw HEX encoded
         self.command("AT+CMGF=1"                    ) # switch to TEXT mode
 
         # enable new message notification
@@ -564,48 +564,59 @@ class GsmModem(object):
            and reassembled them upon delivery, but some will silently
            drop them. At the moment, pyGSM does nothing to avoid this,
            so try to keep _text_ under 160 characters."""
-        text=self._unicode_to_hex(text)
-        try:
+
+        with self.modem_lock:
             try:
+                try:
 
-                # initiate the sms, and give the device a second
-                # to raise an error. unfortunately, we can't just
-                # wait for the "> " prompt, because some modems
-                # will echo it FOLLOWED BY a CMS error
-                result = self.command(
-                    "AT+CMGS=\"%s\"\r" % (recipient),
-                    read_timeout=1)
+                    # initiate the sms, and give the device a second
+                    # to raise an error. unfortunately, we can't just
+                    # wait for the "> " prompt, because some modems
+                    # will echo it FOLLOWED BY a CMS error
+                    result = self.command(
+                        'AT+CMGS=\"%s\"' % (recipient),
+                        read_timeout=1)
 
-            # if no error is raised within the timeout period,
-            # and the text-mode prompt WAS received, send the
-            # sms text, wait until it is accepted or rejected
-            # (text-mode messages are terminated with ascii char 26
-            # "SUBSTITUTE" (ctrl+z)), and return True (message sent)
-            except errors.GsmReadTimeoutError, err:
-                if err.pending_data[0] == ">":
-                    self.command(text, write_term=chr(26))
-                    return True
+                # if no error is raised within the timeout period,
+                # and the text-mode prompt WAS received, send the
+                # sms text, wait until it is accepted or rejected
+                # (text-mode messages are terminated with ascii char 26
+                # "SUBSTITUTE" (ctrl+z)), and return True (message sent)
+                except errors.GsmReadTimeoutError, err:
+                    if err.pending_data[0] == ">":
 
-                # a timeout was raised, but no prompt nor
-                # error was received. i have no idea what
-                # is going on, so allow the error to propagate
-                else:
-                    raise
+                        if self.print_traffic:
+                            print "!! Got message prompt"
+                
+                        self.command(text, write_term=chr(26))
+                        return True
 
-        # for all other errors...
-        # (likely CMS or CME from device)
-        except:
+                    # a timeout was raised, but no prompt nor
+                    # error was received. i have no idea what
+                    # is going on, so allow the error to propagate
+                    else:         
+                        if self.print_traffic:
+                            print "!! Timed out with no prompt"
+                        raise
 
-            # whatever went wrong, break out of the
-            # message prompt. if this is missed, all
-            # subsequent writes will go into the message!
-            self._write(chr(27))
+            # for all other errors...
+            # (likely CMS or CME from device)
+            except Exception as err:
+                if self.print_traffic:
+                    print "!! %r" % (err)
+                    print traceback.format_exc()
+                    print "!! CHR 27"
+                
+                # whatever went wrong, break out of the
+                # message prompt. if this is missed, all
+                # subsequent writes will go into the message!
+                self._write(chr(27))
 
-            # rule of thumb: pyGSM is meant to be embedded,
-            # so DO NOT EVER allow exceptions to propagate
-            # (obviously, this sucks. there should be an
-            # option, at least, but i'm being cautious)
-            return None
+                # rule of thumb: pyGSM is meant to be embedded,
+                # so DO NOT EVER allow exceptions to propagate
+                # (obviously, this sucks. there should be an
+                # option, at least, but i'm being cautious)
+                return None
 
 
     def hardware(self):
