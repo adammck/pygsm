@@ -74,10 +74,9 @@ class GsmModem(object):
     cmd_delay = 0.1
     retry_delay = 2
     max_retries = 10
-    print_traffic = False
-    modem_lock=threading.RLock()
-
-
+    modem_lock = threading.RLock()
+    
+    
     def __init__(self, *args, **kwargs):
         """Creates, connects to, and boots a GSM Modem. All of the arguments
            are optional (although "port=" should almost always be provided),
@@ -90,6 +89,9 @@ class GsmModem(object):
            the default proxy-args-to-pySerial behavior. This is useful when testing,
            or wrapping the serial connection with some custom logic."""
 
+        if "logger" in kwargs:
+            self.logger = kwargs.pop("logger")
+        
         # if a ready-made device was provided, store it -- self.connect
         # will see that we're already connected, and do nothing. we'll
         # just assume it quacks like a serial port
@@ -117,25 +119,63 @@ class GsmModem(object):
         # boot the device on init, to fail as
         # early as possible if it can't be opened
         self.boot()
+    
+    
+    LOG_LEVELS = {
+        "traffic": 4,
+        "read":    4,
+        "write":   4,
+        "debug":   3,
+        "warn":    2,
+        "error":   1 }
+    
+    
+    def _log(self, str, type="debug"):
+        """Proxies a log message to this Modem's logger, if one has been set.
+           This is useful for applications embedding pyGSM that wish to show
+           or log what's going on inside.
 
+           The *logger* should be a function with three arguments:
+             modem:   a reference to this GsmModem instance
+             message: the log message (a unicode string)
+             type:    a string contaning one of the keys
+                      of GsmModem.LOG_LEVELS, indicating
+                      the importance of this message.
 
+           GsmModem.__init__ accepts an optional "logger" kwarg, and a minimal
+           (dump to STDOUT) logger is available at GsmModem.logger:
+
+           >>> GsmModem("/dev/ttyUSB0", logger=GsmModem.logger)"""
+        
+        if hasattr(self, "logger"):
+            self.logger(self, str, type)
+    
+    
+    @staticmethod
+    def logger(modem, message, type):
+        print "%8s %s" % (type, message)
+    
+    
     def connect(self, reconnect=False):
         """Creates the connection to the modem via pySerial, optionally
            killing and re-creating any existing connection."""
-
+           
+        self._log("Connecting")
+        
         # if no connection exists, create it
         # the reconnect flag is irrelevant
         if not hasattr(self, "device") or (self.device is None):
             with self.modem_lock:
                 self.device = serial.Serial(
                     *self.device_args,
-                     **self.device_kwargs)
+                    **self.device_kwargs)
                 
         # the port already exists, but if we're
         # reconnecting, then kill it and recurse
         # to recreate it. this is useful when the
         # connection has died, but nobody noticed
         elif reconnect:
+            
             self.disconnect()
             self.connect(False)
 
@@ -144,7 +184,9 @@ class GsmModem(object):
 
     def disconnect(self):
         """Disconnects from the modem."""
-
+        
+        self._log("Disconnecting")
+        
         # attempt to close and destroy the device
         if hasattr(self, "device") and (self.device is None):
             with self.modem_lock:
@@ -180,7 +222,9 @@ class GsmModem(object):
     def boot(self, reboot=False):
         """Initializes the modem. Must be called after init and connect,
            but before doing anything that expects the modem to be ready."""
-
+        
+        self._log("Booting")
+        
         if reboot:
             # If reboot==True, force a reconnection and full modem reset. SLOW
             self.connect(reconnect=True)
@@ -199,21 +243,23 @@ class GsmModem(object):
             self._fetch_stored_messages()
         except errors.GsmError:
             pass
- 
+
+
     def reboot(self):
         """Forces a reconnect to the serial port and then a full modem reset to factory
            and reconnect to GSM network. SLOW.
         """
         self.boot(reboot=True)
 
+
     def _write(self, str):
         """Write a string to the modem."""
-        try:
-            if self.print_traffic:
-                print ">> %r" % str
-            
-            self.device.write(str)
         
+        self._log(repr(str), "write")
+
+        try:
+            self.device.write(str)
+
         # if the device couldn't be written to,
         # wrap the error in something that can
         # sensibly be caught at a higher level
@@ -224,6 +270,7 @@ class GsmModem(object):
     def _read(self, read_term=None, read_timeout=None):
         """Read from the modem (blocking) until _terminator_ is hit,
            (defaults to \r\n, which reads a single "line"), and return."""
+        
         buffer = []
 
         # if a different timeout was requested just
@@ -244,7 +291,7 @@ class GsmModem(object):
         # until a newline is hit
         if not read_term:
             read_term = "\r\n"
-        
+
         while(True):
             buf = self.device.read()
             buffer.append(buf)
@@ -255,19 +302,17 @@ class GsmModem(object):
             if buf == "":
                 __reset_timeout()
                 raise(errors.GsmReadTimeoutError(buffer))
-        
+
             # if last n characters of the buffer match the read
             # terminator, return what we've received so far
             if buffer[-len(read_term)::] == list(read_term):
                 buf_str = "".join(buffer)
                 __reset_timeout()
-            
-                if self.print_traffic:
-                    print "<< %r" % buf_str
-            
+
+                self._log(repr(buf_str), "read")
                 return buf_str
-    
-    
+
+
     def _wait(self, read_term=None, read_timeout=None):
         """Read from the modem (blocking) one line at a time until a response
            terminator ("OK", "ERROR", or "CMx ERROR...") is hit, then return
@@ -633,28 +678,18 @@ class GsmModem(object):
                 # "SUBSTITUTE" (ctrl+z)), and return True (message sent)
                 except errors.GsmReadTimeoutError, err:
                     if err.pending_data[0] == ">":
-
-                        if self.print_traffic:
-                            print "!! Got message prompt"
-                
                         self.command(text, write_term=chr(26))
                         return True
 
                     # a timeout was raised, but no prompt nor
                     # error was received. i have no idea what
                     # is going on, so allow the error to propagate
-                    else:         
-                        if self.print_traffic:
-                            print "!! Timed out with no prompt"
+                    else:
                         raise
 
             # for all other errors...
             # (likely CMS or CME from device)
             except Exception as err:
-                if self.print_traffic:
-                    print "!! %r" % (err)
-                    print traceback.format_exc()
-                    print "!! CHR 27"
                 
                 # whatever went wrong, break out of the
                 # message prompt. if this is missed, all
