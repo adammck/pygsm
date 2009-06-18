@@ -5,10 +5,26 @@
 import unittest
 import pygsm
 
-from mock.device import MockDevice
+from mock.device import MockDevice, MockSenderDevice
 
 
 class TestIncomingMessage(unittest.TestCase):
+
+    def testSendSms(self):
+        """Checks that the GsmModem accepts outgoing SMS,
+           when the text is within ASCII chars 22 - 126."""
+
+        # this device is much more complicated than
+        # most, so is tucked away in mock.device
+        device = MockSenderDevice()
+        gsm = pygsm.GsmModem(device=device)
+
+        # send an sms, and check that it arrived safely
+        gsm.send_sms("1234", "Test Message")
+        self.assertEqual(device.sent_messages[0]["recipient"], "1234")
+        self.assertEqual(device.sent_messages[0]["text"], "Test Message")
+
+
     def testEchoOff(self):
         """Checks that GsmModem disables echo at some point
            during boot, to simplify logging and processing."""
