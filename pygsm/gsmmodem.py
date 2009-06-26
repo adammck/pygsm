@@ -689,7 +689,7 @@ class GsmModem(object):
 
             # for all other errors...
             # (likely CMS or CME from device)
-            except Exception as err:
+            except Exception, err:
                 
                 # whatever went wrong, break out of the
                 # message prompt. if this is missed, all
