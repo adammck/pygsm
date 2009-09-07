@@ -812,8 +812,9 @@ class GsmModem(object):
         property(
             _get_service_center,
             _set_service_center,
-            """Gets or sets the service center address currently in use by the
-               modem. Returns None if the modem does not support the option.""")
+            doc="""Gets or sets the service center address currently in use by
+                   the modem. Returns None if the modem does not support the
+                   AT+CSCA command.""")
 
 
     @property
