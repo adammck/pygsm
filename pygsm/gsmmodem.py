@@ -143,16 +143,16 @@ class GsmModem(object):
                       the importance of this message.
 
            GsmModem.__init__ accepts an optional "logger" kwarg, and a minimal
-           (dump to STDOUT) logger is available at GsmModem.logger:
+           (dump to STDOUT) logger is available at GsmModem.debug_logger:
 
-           >>> GsmModem("/dev/ttyUSB0", logger=GsmModem.logger)"""
+           >>> GsmModem("/dev/ttyUSB0", logger=GsmModem.debug_logger)"""
         
         if hasattr(self, "logger"):
             self.logger(self, str, type)
     
     
-    @staticmethod
-    def logger(modem, message, type):
+    @classmethod
+    def debug_logger(cls, modem, message, type):
         print "%8s %s" % (type, message)
     
     
