@@ -599,35 +599,67 @@ class GsmModem(object):
         return lines
 
 
-    def query(self, cmd, prefix=None):
-        """Issues a single AT command to the modem, and returns the relevant
-           part of the response. This only works for commands that return a
-           single line followed by "OK", but conveniently, this covers almost
-           all AT commands that I've ever needed to use.
+    def query_list(self, cmd, prefix=None):
+        """Issues a single AT command to the modem, checks that the last line of
+           the response contains "OK", and returns a list containing the other
+           lines. An empty list is returned  if a command fails, so the output
+           of this method can always be assumed to be iterable.
 
-           For all other commands, returns None."""
+           The _prefix_ argument can optionally specify a string to filter the
+           output lines by. Matching lines are returned (sans prefix), and the
+           rest are dropped.
+
+           Most AT commands return a single line, which is better handled by
+           GsmModem.query, which returns a single value."""
 
         # issue the command, which might return incoming
         # messages, but we'll leave them in the queue
-        out = self.command(cmd)
+        lines = self.command(cmd, raise_errors=False)
 
-        # the only valid response to a "query" is a
-        # single line followed by "OK". if all looks
-        # well, return just the single line
-        if(len(out) == 2) and (out[-1] == "OK"):
-            if prefix is None:
-                return out[0].strip()
+        # check that the query was successful
+        # if not, we'll skip straight to return
+        if lines is not None and lines[-1] == "OK":
 
-            # if a prefix was provided, check that the
-            # response starts with it, and return the
-            # cropped remainder
+            # if a prefix was provided, return all of the
+            # lines (except for OK) that start with _prefix_
+            if prefix is not None:
+                return [
+                    line[len(prefix):].strip()
+                    for line in lines[:-1]
+                    if line[:len(prefix)] == prefix]
+
+            # otherwise, return all lines
+            # (except for the trailing OK)
             else:
-                if out[0][:len(prefix)] == prefix:
-                    return out[0][len(prefix):].strip()
+                return lines[:-1]
 
         # something went wrong, so return the very
         # ambiguous None. it's better than blowing up
         return None
+
+
+    def query(self, cmd, prefix=None):
+        """Issues a single AT command to the modem, and returns the relevant
+           part of the response. This only works for commands that return a
+           single line followed by "OK", but conveniently, this covers almost
+           all AT commands that I've ever needed to use. For example:
+
+              >>> modem.query("AT+CSQ")
+              "+CSQ: 20,99"
+
+           Optionally, the _prefix_ argument can specify a string to check for
+           at the beginning of the output, and strip it from the return value.
+           This is useful when you want to both verify that the output was as
+           expected, but ignore the prefix. For example:
+
+              >>> modem.query("AT+CSQ", prefix="+CSQ:")
+              "20,99"
+
+           For all unexpected responses (errors, no output, or too much output),
+           returns None."""
+
+        lines = self.query_list(cmd, prefix)
+        return lines[0] if len(lines) == 1 else None
 
 
     def _csv_str(self, out):
