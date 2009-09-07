@@ -723,6 +723,40 @@ class GsmModem(object):
             "serial":       self.query("AT+CGSN") }
 
 
+    def _get_service_center(self):
+
+        # fetch the current service center,
+        # which returns something like:
+        # +CSCA: "+250788110333",145
+        data = self.query("AT+CSCA?")
+        if data is not None:
+
+            # extract the service center number
+            # (the first argument) from the output
+            md = re.match(r'^\+CSCA:\s+"(\+?\d+)",', data)
+            if md is not None:
+                return md.group(1)
+
+        # if we have not returned yet, something
+        # went wrong. this modem probably doesn't
+        # support AT+CSCA, so return None/unknown
+        return None
+
+    def _set_service_center(self, value):
+        self.command(
+            'AT+CSCA="%s"' % value,
+            raise_errors=False)
+
+    # allow the service center to be get or set like an attribute,
+    # while transparently reconfiguring the modem behind the scenes
+    service_center =\
+        property(
+            _get_service_center,
+            _set_service_center,
+            """Gets or sets the service center address currently in use by the
+               modem. Returns None if the modem does not support the option.""")
+
+
     def signal_strength(self):
         """Returns an integer between 1 and 99, representing the current
            signal strength of the GSM network, False if we don't know, or
