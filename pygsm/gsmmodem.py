@@ -4,7 +4,7 @@
 
 from __future__ import with_statement
 
-import re, datetime, time
+import re, csv, datetime, time
 import errors, message
 import traceback
 import StringIO
@@ -628,6 +628,33 @@ class GsmModem(object):
         # something went wrong, so return the very
         # ambiguous None. it's better than blowing up
         return None
+
+
+    def _csv_str(self, out):
+        """Many queries will return comma-separated output, which is not
+           formally specified (as far as I can tell), but strongly resembles
+           CSV. This method splits the output of self.query into a list. No
+           type casting is performed on the elements -- they're all strings,
+           as returned by the Python CSV module. For example:
+
+              >>> modem.query("AT+COPS?", prefix="+COPS:", split_output=True)
+              ["0", "0", "MTN Rwanda", "2"]
+
+           If the string couldn't be parsed, GsmParseError is raised."""
+
+        try:
+            # parse the query output as if it were a single-line
+            # csv file. override line terminator in case there
+            # are any \r\n terminators within the output
+            reader = csv.reader([out], lineterminator="\0\0")
+
+            # attempt to return the parsed row. this will raise
+            # an internal _csv.Error exception if the string is
+            # badly formed, which we will wrap, below
+            return list(reader)[0]
+
+        except:
+            raise errors.GsmParseError(out)
 
 
     def send_sms(self, recipient, text):

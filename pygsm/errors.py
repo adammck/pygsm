@@ -26,6 +26,15 @@ class GsmReadTimeoutError(GsmReadError):
         self.pending_data = pending_data
 
 
+class GsmParseError(GsmReadError):
+    def __init__(self, data):
+        self.data = data
+
+    def __str__(self):
+        return "Couldn't parse: %s" %\
+            (self.data)
+
+
 class GsmModemError(GsmError):
     STRINGS = {
         "CME": {
