@@ -816,6 +816,99 @@ class GsmModem(object):
                modem. Returns None if the modem does not support the option.""")
 
 
+    @property
+    def _known_networks(self):
+        """Returns a dict containing all networks known to this modem, keyed by
+           their numeric ID, valued by their alphanumeric operator name. This is
+           not especially useful externally, but is used internally to resolve
+           operator IDs to their alphanumeric name.
+
+           Many devices can do this internally, via the AT+WOPN command, but the
+           Huawei dongle I'm on today happens not to support that, and I expect
+           many others are the same.
+
+           This method will always return a dict (even if it's empty), and
+           caches its own output, since it can be quite slow and large."""
+
+        # if the cache hasn't already been built, do so
+        if not hasattr(self, "_known_networks_cache"):
+            self._known_networks_cache = {}
+
+            try:
+
+                # fetch a list of ALL networks known to this modem,
+                # which returns a CME error (caught below) or many
+                # lines in the format:
+                #   +COPN: <NumOper>, <AlphaOper>
+                #   +COPN: <NumOper>, <AlphaOper>
+                #   ...
+                #   OK
+                #
+                # where <NumOper> is the numeric operator ID
+                # where <AlphaOper> is long alphanumeric operator name
+                lines = self.query_list("AT+COPN", "+COPN:")
+
+                # parse each line into a two-element
+                # array, and cast the result to a dict
+                self._known_networks_cache =\
+                    dict(map(self._csv_str, lines))
+
+            # if anything went wrong (and many things can)
+            # during this operation, we will return the empty,
+            # dict to indicate that we don't know _any_ networks
+            except errors.GsmError:
+                pass
+
+        return self._known_networks_cache
+
+
+    @property
+    def network(self):
+        """Returns the name of the currently selected GSM network."""
+
+        # fetch the current PLMN (Public Land Mobile Network)
+        # setting, which should return something like:
+        #   +COPS: <mode> [, <format>, <oper>]
+        #
+        # where <mode> is one of:
+        #   0 - automatic (default)
+        #   1 - manual
+        #   2 - deregistered
+        #   3 - set only (the network cannot be read, only set)
+        #
+        # where <format> is one of:
+        #   0 - long alphanumeric
+        #   1 - short alphanumeric
+        #   2 - numeric (default)
+        #
+        # and <oper> is the operator identifier in the format
+        # specified by <format>
+
+        data = self.query("AT+COPS?", "+COPS:")
+        if data is not None:
+
+            # parse the csv-style output
+            fields = self._csv_str(data)
+
+            # if the <oper> was in long or short alphanumerics,
+            # (according to <format>), return it as-is. this
+            # happens when the network is unknown to the modem
+            if fields[1] in ["0", "1"]:
+                return fields[2]
+
+            # if the <oper> was numeric, we're going to
+            # have to look up the PLMN string separately.
+            # return if it's known, or fall through to None
+            elif fields[1] == "2":
+                network_id = fields[2]
+                if network_id in self._known_networks:
+                    return self._known_networks[network_id]
+
+        # if we have not returned yet, something wernt
+        # wrong during the query or parsing the response
+        return None
+
+
     def signal_strength(self):
         """Returns an integer between 1 and 99, representing the current
            signal strength of the GSM network, False if we don't know, or
