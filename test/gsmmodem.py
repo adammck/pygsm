@@ -10,6 +10,14 @@ from mock.device import MockDevice, MockSenderDevice
 
 class TestIncomingMessage(unittest.TestCase):
 
+    def testWritesNothingDuringInit(self):
+        """Nothing is written to the modem during __init__"""
+
+        device = MockDevice()
+        gsm = pygsm.GsmModem(device=device)
+        self.assertEqual(device.buf_write, [])
+
+
     def testSendSms(self):
         """Checks that the GsmModem accepts outgoing SMS,
            when the text is within ASCII chars 22 - 126."""
@@ -17,7 +25,7 @@ class TestIncomingMessage(unittest.TestCase):
         # this device is much more complicated than
         # most, so is tucked away in mock.device
         device = MockSenderDevice()
-        gsm = pygsm.GsmModem(device=device)
+        gsm = pygsm.GsmModem(device=device).boot()
 
         # send an sms, and check that it arrived safely
         gsm.send_sms("1234", "Test Message")
@@ -62,7 +70,7 @@ class TestIncomingMessage(unittest.TestCase):
         # change the boot sequence often)
         device = MockBusyDevice()
         n = len(device.retried)
-        gsm = pygsm.GsmModem(device=device)
+        gsm = pygsm.GsmModem(device=device).boot()
         self.assert_(len(device.retried) > n)
         
         # try the special AT+TEST command, which doesn't
@@ -70,7 +78,6 @@ class TestIncomingMessage(unittest.TestCase):
         n = len(device.retried)
         gsm.command("AT+TEST=1")
         self.assertEqual(len(device.retried), n)
-        
 
 
     def testEchoOff(self):
@@ -89,7 +96,7 @@ class TestIncomingMessage(unittest.TestCase):
                 return True
 
         device = MockEchoDevice()
-        gsm = pygsm.GsmModem(device=device)
+        gsm = pygsm.GsmModem(device=device).boot()
         self.assertEqual(device.echo, False)
 
 
@@ -116,7 +123,7 @@ class TestIncomingMessage(unittest.TestCase):
                 return False
 
         device = MockUsefulErrorsDevice()
-        gsm = pygsm.GsmModem(device=device)
+        gsm = pygsm.GsmModem(device=device).boot()
         self.assertEqual(device.useful_errors, True)
 
 

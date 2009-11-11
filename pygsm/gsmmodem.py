@@ -116,11 +116,7 @@ class GsmModem(object):
         # to store unhandled incoming messages
         self.incoming_queue = []
 
-        # boot the device on init, to fail as
-        # early as possible if it can't be opened
-        self.boot()
-    
-    
+
     LOG_LEVELS = {
         "traffic": 4,
         "read":    4,
@@ -175,7 +171,6 @@ class GsmModem(object):
         # to recreate it. this is useful when the
         # connection has died, but nobody noticed
         elif reconnect:
-            
             self.disconnect()
             self.connect(False)
 
@@ -201,11 +196,27 @@ class GsmModem(object):
         return False
 
 
-    def set_modem_config(self):
-        """initialize the modem configuration with settings needed to process
-           commands and send/receive SMS.
+    def boot(self, reboot=False):
         """
+        (Re-)Connect to the modem and configure it in an (often vain)
+        attempt to standardize the behavior of the many vendors and
+        models. Should be called before reading or writing.
         
+        This method isn't called during __init__, since it's often
+        useful to create GsmModem objects without writing to the modem.
+        To compensate, this method returns 'self', so it can be easily
+        chained onto the constructor.
+        """
+
+        self._log("Booting")
+
+        if reboot:
+            self.connect(reconnect=True)
+            self.command("AT+CFUN=1")
+
+        else:
+            self.connect()
+
         # set some sensible defaults, to make
         # the various modems more consistant
         self.command("ATE0",      raise_errors=False) # echo off
@@ -213,36 +224,12 @@ class GsmModem(object):
         self.command("AT+WIND=0", raise_errors=False) # disable notifications
         self.command("AT+CMGF=1"                    ) # switch to TEXT mode
 
-        # enable new message notification
-        self.command(
-            "AT+CNMI=2,2,0,0,0",
-            raise_errors=False)
-
-
-    def boot(self, reboot=False):
-        """Initializes the modem. Must be called after init and connect,
-           but before doing anything that expects the modem to be ready."""
-        
-        self._log("Booting")
-        
-        if reboot:
-            # If reboot==True, force a reconnection and full modem reset. SLOW
-            self.connect(reconnect=True)
-            self.command("AT+CFUN=1")
-        else:
-            # else just verify connection
-            self.connect()
-
-        # In both cases, reset the modem's config
-        self.set_modem_config()        
-
-        # And check for any waiting messages PRIOR to setting
-        # the CNMI call--this is not supported by all modems--
-        # in which case we catch the exception and plow onward
-        try:
-            self._fetch_stored_messages()
-        except errors.GsmError:
-            pass
+        return self
+        # enable new message notification. (most
+        # handsets don't support this; no matter)
+        #self.command(
+        #    "AT+CNMI=2,2,0,0,0",
+        #    raise_errors=False)
 
 
     def reboot(self):
@@ -501,10 +488,13 @@ class GsmModem(object):
         # into a unicode string
         try:
             if (len(text) % 4 == 0) and (len(text) > 0):
-                bom = text[:4].lower()
-                if bom == "fffe"\
-                or bom == "feff":
-                    
+                if re.match('^[0-9A-F]+$', text):
+
+                    # insert a bom if there isn't one
+                    bom = text[:4].lower()
+                    if bom != "fffe" and bom != "feff":
+                        text = "feff" + text
+
                     # decode the text into a unicode string,
                     # so developers embedding pyGSM need never
                     # experience this confusion and pain
@@ -516,6 +506,7 @@ class GsmModem(object):
             pass
 
         # create and store the IncomingMessage object
+        self._log("Adding incoming message")
         time_sent = self._parse_incoming_timestamp(timestamp)
         msg = message.IncomingMessage(self, sender, time_sent, text)
         self.incoming_queue.append(msg)
