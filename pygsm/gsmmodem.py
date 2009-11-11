@@ -16,7 +16,7 @@ import serial
 
 # Constants
 CMGL_STATUS="REC UNREAD" 
-CMGL_MATCHER=re.compile(r'^\+CMGL: (\d+),"(.+?)","(.+?)",*?,"(.+?)".*?$')
+CMGL_MATCHER=re.compile(r'^\+CMGL: (\d+),"(.+?)","(.+?)",.*?,"(.+?)".*?$')
 
 class GsmModem(object):
     """pyGSM is a Python module which uses pySerial to provide a nifty
