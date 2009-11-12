@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # vim: ai ts=4 sts=4 et sw=4
+# see LICENSE file (it's BSD)
 
 
 import unittest
@@ -73,20 +74,20 @@ class TestGsmModem(unittest.TestCase):
         """Checks that the GsmModem automatically retries
            commands that fail with a CMS 515 error, and does
            not retry those that fail with other errors."""
-        
+
         class MockBusyDevice(MockDevice):
             def __init__(self):
                 MockDevice.__init__(self)
                 self.last_cmd = None
                 self.retried = []
-            
+
             # this command is special (and totally made up)
             # it does not return 515 errors like the others
             def at_test(self, one):
                 return True
-            
+
             def process(self, cmd):
-                
+
                 # if this is the first time we've seen
                 # this command, return a BUSY error to
                 # (hopefully) prompt a retry
@@ -94,7 +95,7 @@ class TestGsmModem(unittest.TestCase):
                     self._output("+CMS ERROR: 515")
                     self.last_cmd = cmd
                     return None
-                
+
                 # the second time, note that this command was
                 # retried, then fail. kind of anticlimatic
                 self.retried.append(cmd)
@@ -113,7 +114,7 @@ class TestGsmModem(unittest.TestCase):
         # change the boot sequence often)
         gsm.boot()
         self.assert_(len(device.retried) > n)
-        
+
         # try the special AT+TEST command, which doesn't
         # fail - the number of retries shouldn't change
         n = len(device.retried)
@@ -127,12 +128,12 @@ class TestGsmModem(unittest.TestCase):
 
         class MockEchoDevice(MockDevice):
             def process(self, cmd):
-                
+
                 # raise and error for any
                 # cmd other than ECHO OFF
                 if cmd != "ATE0":
                     return False
-                
+
                 self.echo = False
                 return True
 
