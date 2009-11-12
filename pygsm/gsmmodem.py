@@ -352,6 +352,11 @@ class GsmModem(object):
             if buf == "ERROR":
                 raise(errors.GsmModemError)
 
+            # some (but not all) huawei e220s (an otherwise splendid
+            # modem) return this useless and non-standard error
+            if buf == "COMMAND NOT SUPPORT":
+                raise(errors.GsmModemError)
+
 
     SCTS_FMT = "%y/%m/%d,%H:%M:%S"
 
