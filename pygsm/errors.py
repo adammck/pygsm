@@ -41,6 +41,11 @@ class GsmParseError(GsmReadError):
 
 
 class GsmModemError(GsmError):
+
+    # strings and error codes seem to vary a bit by vendor,
+    # but they're sort-of standard. for a good reference, see:
+    # http://www.activexperts.com/xmstoolkit/sms/gsmerrorcodes/
+
     STRINGS = {
         "CME": {
             3:   "Operation not allowed",
@@ -50,6 +55,7 @@ class GsmModemError(GsmError):
             11:  "SIM PIN required",
             12:  "SIM PUK required",
             13:  "SIM failure",
+            14:  "SIM busy",
             16:  "Incorrect password",
             17:  "SIM PIN2 required",
             18:  "SIM PUK2 required",
@@ -74,6 +80,7 @@ class GsmModemError(GsmError):
             148: "unspecified GPRS error",
             149: "PDP authentication failure",
             150: "Invalid mobile class" },
+
         "CMS": {
             021: "Call Rejected (out of credit?)",
             301: "SMS service of ME reserved",
