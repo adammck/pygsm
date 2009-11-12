@@ -53,7 +53,7 @@ class GsmModem(object):
     cmd_delay = 0.1
     retry_delay = 2
     max_retries = 10
-    modem_lock = threading.RLock()
+    _modem_lock = threading.RLock()
 
 
     def __init__(self, *args, **kwargs):
@@ -156,7 +156,7 @@ class GsmModem(object):
         # the reconnect flag is irrelevant
         if not hasattr(self, "device") or (self.device is None):
             try:
-                with self.modem_lock:
+                with self._modem_lock:
                     self.device = serial.Serial(
                         *self.device_args,
                         **self.device_kwargs)
@@ -193,7 +193,7 @@ class GsmModem(object):
 
         # attempt to close and destroy the device
         if hasattr(self, "device") and (self.device is None):
-            with self.modem_lock:
+            with self._modem_lock:
                 if self.device.isOpen():
                     self.device.close()
                     self.device = None
@@ -368,7 +368,7 @@ class GsmModem(object):
                 raise(errors.GsmModemError)
 
 
-    SCTS_FMT = "%y/%m/%d,%H:%M:%S"
+    _SCTS_FMT = "%y/%m/%d,%H:%M:%S"
 
     def _parse_incoming_timestamp(self, timestamp):
         """
@@ -395,7 +395,7 @@ class GsmModem(object):
         # attempt to parse the (maybe modified) timestamp into
         # a time_struct, and convert it into a datetime object
         try:
-            time_struct = time.strptime(timestamp, self.SCTS_FMT)
+            time_struct = time.strptime(timestamp, self._SCTS_FMT)
             dt = datetime.datetime(*time_struct[:6])
 
             # patch the time to represent LOCAL TIME, since
@@ -557,7 +557,7 @@ class GsmModem(object):
         response to the command.
 
         If Error 515 (init or command in progress) is returned, the
-        command is automatically retried up to _GsmModem.max_retries_
+        command is automatically retried up to 'GsmModem.max_retries'
         times.
         """
 
@@ -569,7 +569,7 @@ class GsmModem(object):
 
                 # issue the command, and wait for the
                 # response
-                with self.modem_lock:
+                with self._modem_lock:
                     self._write(cmd + write_term)
                     lines = self._wait(
                         read_term=read_term,
@@ -680,7 +680,7 @@ class GsmModem(object):
         >>> modem.query("AT+CSQ")
         "+CSQ: 20,99"
 
-        Optionally, the _prefix_ argument can specify a string to check
+        Optionally, the 'prefix' argument can specify a string to check
         for at the beginning of the output, and strip it from the return
         value. This is useful when you want to both verify that the
         output was as expected, but ignore the prefix. For example:
@@ -735,7 +735,7 @@ class GsmModem(object):
         """
 
         old_mode = None
-        with self.modem_lock:
+        with self._modem_lock:
             try:
                 try:
                     # cast the text to a string, to check that
@@ -908,7 +908,7 @@ class GsmModem(object):
         return self._known_networks_cache
 
 
-    PLMN_MODES = {
+    _PLMN_MODES = {
         "0": "(Automatic)",
         "1": "(Manual)",
         "2": "(Deregistered)",
@@ -948,7 +948,7 @@ class GsmModem(object):
             # if the operator fields weren't returned (ie, "+COPS: 0"),
             # just return a rough description of what's going on
             if len(fields) == 1:
-                return self.PLMN_MODES[fields[0]]
+                return self._PLMN_MODES[fields[0]]
 
             # if the <oper> was in long or short alphanumerics,
             # (according to <format>), return it as-is. this
