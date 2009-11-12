@@ -99,14 +99,19 @@ class TestGsmModem(unittest.TestCase):
                 # retried, then fail. kind of anticlimatic
                 self.retried.append(cmd)
                 return False
-        
+
+        device = MockBusyDevice()
+        gsm = pygsm.GsmModem(device=device)
+        n = len(device.retried)
+
+        # override the usual retry delay, to run the tests fast
+        gsm.retry_delay = 0.01
+
         # boot the modem, and make sure that
         # some commands were retried (i won't
         # check _exactly_ how many, since we
         # change the boot sequence often)
-        device = MockBusyDevice()
-        n = len(device.retried)
-        gsm = pygsm.GsmModem(device=device).boot()
+        gsm.boot()
         self.assert_(len(device.retried) > n)
         
         # try the special AT+TEST command, which doesn't
