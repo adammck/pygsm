@@ -26,22 +26,21 @@ class GsmModem(object):
     from RubyGSM, and provides (almost) all of the same features. It's
     easy to get started:
 
-    # create a GsmModem object:
-    >>> import pygsm
-    >>> modem = pygsm.GsmModem(port="/dev/ttyUSB0")
+      # create a GsmModem object:
+      >>> modem = pygsm.GsmModem(port="/dev/ttyUSB0")
 
-    # harass Evan over SMS:
-    # (try to do this before 11AM)
-    >>> modem.send_sms("+13364130840", "Hey, wake up!")
+      # harass Evan over SMS:
+      # (try to do this before 11AM)
+      >>> modem.send_sms(*REDACTED*, "Hey, wake up!")
 
-    # check for incoming SMS:
-    >>> print modem.next_message()
-    <pygsm.IncomingMessage from +13364130840: "Leave me alone!">
+      # check for incoming SMS:
+      >>> print modem.next_message()
+      <pygsm.IncomingMessage from *REDACTED*: "Leave me alone!">
 
     pyGSM is distributed via GitHub:
     http://github.com/adammck/pygsm
 
-    Bugs reports (especially for
+    Bug reports (especially for
     unsupported devices) are welcome:
     http://github.com/adammck/pygsm/issues
     """
