@@ -1144,7 +1144,7 @@ if __name__ == "__main__":
         # connect to the modem (this might hang
         # if the connection settings are wrong)
         print "Connecting to GSM Modem..."
-        modem = GsmModem(port=port, **conf)
+        modem = GsmModem(port=port, **conf).boot()
         print "Waiting for incoming messages..."
 
         # check for new messages every two
