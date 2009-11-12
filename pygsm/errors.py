@@ -9,6 +9,10 @@ class GsmError(serial.SerialException):
     pass
 
 
+class GsmConnectError(GsmError):
+    pass
+
+
 class GsmIOError(GsmError):
     pass
 

@@ -106,6 +106,7 @@ class GsmModem(object):
         # for regular serial connections, store the connection args, since
         # we might need to recreate the serial connection again later
         else:
+            self.device = None
             self.device_args = args
             self.device_kwargs = kwargs
 
@@ -161,11 +162,26 @@ class GsmModem(object):
         # if no connection exists, create it
         # the reconnect flag is irrelevant
         if not hasattr(self, "device") or (self.device is None):
-            with self.modem_lock:
-                self.device = serial.Serial(
-                    *self.device_args,
-                    **self.device_kwargs)
-                
+            try:
+                with self.modem_lock:
+                    self.device = serial.Serial(
+                        *self.device_args,
+                        **self.device_kwargs)
+
+            # if the connection failed, re-raise the serialexception as
+            # a gsm error, so the owner of this object doesn't have to
+            # worry about catching anything other than gsm exceptions
+            except serial.SerialException, err:
+                msg = str(err)
+                if msg.startswith("could not open port"):
+                    pyserial_err, real_err = msg.split(":", 1)
+                    raise errors.GsmConnectError(real_err.strip())
+
+                # other (more obscure) errors don't get their own class,
+                # but wrap them in a gsmerror all the same
+                else:
+                    raise errors.GsmError(msg)
+
         # the port already exists, but if we're
         # reconnecting, then kill it and recurse
         # to recreate it. this is useful when the
