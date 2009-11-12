@@ -15,57 +15,36 @@ import threading
 import serial
 
 # Constants
-CMGL_STATUS="REC UNREAD" 
+CMGL_STATUS="REC UNREAD"
 CMGL_MATCHER=re.compile(r'^\+CMGL: (\d+),"(.+?)","(.+?)",.*?,"(.+?)".*?$')
 
+
 class GsmModem(object):
-    """pyGSM is a Python module which uses pySerial to provide a nifty
-       interface to send and receive SMS via a GSM Modem. It was ported
-       from RubyGSM, and provides (almost) all of the same features. It's
-       easy to get started:
+    """
+    pyGSM is a Python module which uses pySerial to provide a nifty
+    interface to send and receive SMS via a GSM Modem. It was ported
+    from RubyGSM, and provides (almost) all of the same features. It's
+    easy to get started:
 
-          # create a GsmModem object:
-          >>> import pygsm
-          >>> modem = pygsm.GsmModem(port="/dev/ttyUSB0")
+    # create a GsmModem object:
+    >>> import pygsm
+    >>> modem = pygsm.GsmModem(port="/dev/ttyUSB0")
 
-          # harass Evan over SMS:
-          # (try to do this before 11AM)
-          >>> modem.send_sms("+13364130840", "Hey, wake up!")
+    # harass Evan over SMS:
+    # (try to do this before 11AM)
+    >>> modem.send_sms("+13364130840", "Hey, wake up!")
 
-          # check for incoming SMS:
-          >>> print modem.next_message()
-          <pygsm.IncomingMessage from +13364130840: "Leave me alone!">
+    # check for incoming SMS:
+    >>> print modem.next_message()
+    <pygsm.IncomingMessage from +13364130840: "Leave me alone!">
 
+    pyGSM is distributed via GitHub:
+    http://github.com/adammck/pygsm
 
-       There are various ways of polling for incoming messages -- a choice
-       which has been deliberately left to the application author (unlike
-       RubyGSM). Execute `python -m pygsm.gsmmodem` to run this example:
-
-          # connect to the modem
-          modem = pygsm.GsmModem(port=sys.argv[1])
-
-          # check for new messages every two
-          # seconds for the rest of forever
-          while True:
-              msg = modem.next_message()
-
-              # we got a message! respond with
-              # something useless, as an example
-              if msg is not None:
-                  msg.respond("Thanks for those %d characters!" %
-                      len(msg.text))
-
-              # no messages? wait a couple
-              # of seconds and try again
-              else: time.sleep(2)
-
-
-       pyGSM is distributed via GitHub:
-       http://github.com/adammck/pygsm
-
-       Bugs reports (especially for
-       unsupported devices) are welcome:
-       http://github.com/adammck/pygsm/issues"""
+    Bugs reports (especially for
+    unsupported devices) are welcome:
+    http://github.com/adammck/pygsm/issues
+    """
 
 
     # override these after init, and
@@ -75,23 +54,29 @@ class GsmModem(object):
     retry_delay = 2
     max_retries = 10
     modem_lock = threading.RLock()
-    
-    
+
+
     def __init__(self, *args, **kwargs):
-        """Creates, connects to, and boots a GSM Modem. All of the arguments
-           are optional (although "port=" should almost always be provided),
-           and passed along to serial.Serial.__init__ verbatim. For all of
-           the possible configration options, see:
+        """
+        Create a GsmModem object. All of the arguments are passed along
+        to serial.Serial.__init__ when GsmModem.connect is called. For
+        all of the possible configration options, see:
 
-           http://pyserial.wiki.sourceforge.net/pySerial#tocpySerial10
+        http://pyserial.wiki.sourceforge.net/pySerial#tocpySerial10
 
-           Alternatively, a single "device" kwarg can be passed, which overrides
-           the default proxy-args-to-pySerial behavior. This is useful when testing,
-           or wrapping the serial connection with some custom logic."""
+        Alternatively, a single 'device' kwarg can be passed, which
+        overrides the default proxy-args-to-pySerial behavior. This is
+        useful when testing, or wrapping the serial connection with some
+        custom logic.
+
+        NOTE: The serial connection isn't created until GsmModem.connect
+        is called. It might still fail (but should raise GsmConnectError
+        when it does so.)
+        """
 
         if "logger" in kwargs:
             self.logger = kwargs.pop("logger")
-        
+
         # if a ready-made device was provided, store it -- self.connect
         # will see that we're already connected, and do nothing. we'll
         # just assume it quacks like a serial port
@@ -125,40 +110,48 @@ class GsmModem(object):
         "debug":   3,
         "warn":    2,
         "error":   1 }
-    
-    
+
+
     def _log(self, str, type="debug"):
-        """Proxies a log message to this Modem's logger, if one has been set.
-           This is useful for applications embedding pyGSM that wish to show
-           or log what's going on inside.
+        """
+        Proxy a log message to this Modem's logger, if one has been set.
+        This is useful for applications embedding pyGSM that wish to
+        show or log what's going on inside.
 
-           The *logger* should be a function with three arguments:
-             modem:   a reference to this GsmModem instance
-             message: the log message (a unicode string)
-             type:    a string contaning one of the keys
-                      of GsmModem.LOG_LEVELS, indicating
-                      the importance of this message.
+        The 'logger' should be a function with three arguments:
+            modem:   a reference to this GsmModem instance
+            message: the log message (a unicode string)
+            type:    a string contaning one of the keys
+                     of GsmModem.LOG_LEVELS, indicating
+                     the importance of this message.
 
-           GsmModem.__init__ accepts an optional "logger" kwarg, and a minimal
-           (dump to STDOUT) logger is available at GsmModem.debug_logger:
+        GsmModem.__init__ accepts an optional 'logger' kwarg, and a
+        minimal (dump to STDOUT) logger is at GsmModem.debug_logger:
 
-           >>> GsmModem("/dev/ttyUSB0", logger=GsmModem.debug_logger)"""
-        
+        >>> GsmModem("/dev/ttyUSB0", logger=GsmModem.debug_logger)
+        """
+
         if hasattr(self, "logger"):
             self.logger(self, str, type)
-    
-    
+
+
     @classmethod
     def debug_logger(cls, modem, message, type):
         print "%8s %s" % (type, message)
-    
-    
+
+
     def connect(self, reconnect=False):
-        """Creates the connection to the modem via pySerial, optionally
-           killing and re-creating any existing connection."""
-           
+        """
+        Connect to the modem via pySerial, using the args and kwargs
+        provided to the constructor. If 'reconnect' is True, and the
+        modem is already connected, the entire serial.Serial object is
+        destroyed and re-established.
+
+        Returns self.device, or raises GsmConnectError
+        """
+
         self._log("Connecting")
-        
+
         # if no connection exists, create it
         # the reconnect flag is irrelevant
         if not hasattr(self, "device") or (self.device is None):
@@ -194,10 +187,10 @@ class GsmModem(object):
 
 
     def disconnect(self):
-        """Disconnects from the modem."""
-        
+        """Disconnect from the modem."""
+
         self._log("Disconnecting")
-        
+
         # attempt to close and destroy the device
         if hasattr(self, "device") and (self.device is None):
             with self.modem_lock:
@@ -205,7 +198,7 @@ class GsmModem(object):
                     self.device.close()
                     self.device = None
                     return True
-        
+
         # for some reason, the device
         # couldn't be closed. it probably
         # just isn't open yet
@@ -217,11 +210,18 @@ class GsmModem(object):
         (Re-)Connect to the modem and configure it in an (often vain)
         attempt to standardize the behavior of the many vendors and
         models. Should be called before reading or writing.
-        
-        This method isn't called during __init__, since it's often
-        useful to create GsmModem objects without writing to the modem.
-        To compensate, this method returns 'self', so it can be easily
-        chained onto the constructor.
+
+        This method isn't called during __init__ (since 5f41ba6d), since
+        it's often useful to create GsmModem objects without writing to
+        the modem. To compensate, this method returns 'self', so it can
+        be easily chained onto the constructor, like so:
+
+        >>> gsm = GsmModem(port="whatever").boot()
+
+        This is exactly the same as:
+
+        >>> gsm = GsmModem(port="whatever")
+        >>> gsm.boot()
         """
 
         self._log("Booting")
@@ -249,15 +249,19 @@ class GsmModem(object):
 
 
     def reboot(self):
-        """Forces a reconnect to the serial port and then a full modem reset to factory
-           and reconnect to GSM network. SLOW.
         """
+        Disconnect from the modem, reconnect, and reboot it (AT+CFUN=1,
+        which clears all volatile state). This drops the connection to
+        the network, so it's wise to call _GsmModem.wait_for_network_
+        after rebooting.
+        """
+
         self.boot(reboot=True)
 
 
     def _write(self, str):
         """Write a string to the modem."""
-        
+
         self._log(repr(str), "write")
 
         try:
@@ -271,9 +275,12 @@ class GsmModem(object):
 
 
     def _read(self, read_term=None, read_timeout=None):
-        """Read from the modem (blocking) until _terminator_ is hit,
-           (defaults to \r\n, which reads a single "line"), and return."""
-        
+        """
+        Keep reading and buffering characters from the modem (blocking)
+        until 'read_term' (which defaults to \r\n, to read a single
+        "line") is hit, then return the buffer.
+        """
+
         buffer = []
 
         # if a different timeout was requested just
@@ -317,12 +324,15 @@ class GsmModem(object):
 
 
     def _wait(self, read_term=None, read_timeout=None):
-        """Read from the modem (blocking) one line at a time until a response
-           terminator ("OK", "ERROR", or "CMx ERROR...") is hit, then return
-           a list containing the lines."""
+        """
+        Read (blocking) from the modem, one line at a time, until a
+        response terminator ("OK", "ERROR", or "CMx ERROR...") is hit,
+        then return a list containing the lines.
+        """
+
         buffer = []
 
-        # keep on looping until a command terminator
+        # keep on looping until a response terminator
         # is encountered. these are NOT the same as the
         # "read_term" argument - only OK or ERROR is valid
         while(True):
@@ -361,9 +371,12 @@ class GsmModem(object):
     SCTS_FMT = "%y/%m/%d,%H:%M:%S"
 
     def _parse_incoming_timestamp(self, timestamp):
-        """Parse a Service Center Time Stamp (SCTS) string into a Python datetime
-           object, or None if the timestamp couldn't be parsed. The SCTS format does
-           not seem to be standardized, but looks something like: YY/MM/DD,HH:MM:SS."""
+        """
+        Parse a Service Center Time Stamp (SCTS) string into a Python
+        datetime object, or None if the timestamp couldn't be parsed.
+        The SCTS format does not seem to be standardized, but looks
+        something like: YY/MM/DD,HH:MM:SS.
+        """
 
         # timestamps usually have trailing timezones, measured
         # in 15-minute intervals (?!), which is not handled by
@@ -398,10 +411,12 @@ class GsmModem(object):
 
 
     def _parse_incoming_sms(self, lines):
-        """Parse a list of lines (the output of GsmModem._wait), to extract any
-           incoming SMS and append them to GsmModem.incoming_queue. Returns the
-           same lines with the incoming SMS removed. Other unsolicited data may
-           remain, which must be cropped separately."""
+        """
+        Parse a list of 'lines' (output of GsmModem._wait), to extract
+        any incoming SMS and append them to _GsmModem.incoming_queue_.
+        Returns the same lines with the incoming SMS removed. Other
+        unsolicited data may remain, which must be cropped separately.
+        """
 
         output_lines = []
         n = 0
@@ -535,13 +550,16 @@ class GsmModem(object):
 
 
     def command(self, cmd, read_term=None, read_timeout=None, write_term="\r", raise_errors=True):
-        """Issue a single AT command to the modem, and return the sanitized
-           response. Sanitization removes status notifications, command echo,
-           and incoming messages, (hopefully) leaving only the actual response
-           from the command.
-           
-           If Error 515 (init or command in progress) is returned, the command
-           is automatically retried up to _GsmModem.max_retries_ times."""
+        """
+        Issue an AT command to the modem, and return the sanitized
+        response. Sanitization removes status notifications, command
+        echo, and incoming messages, (hopefully) leaving only the actual
+        response to the command.
+
+        If Error 515 (init or command in progress) is returned, the
+        command is automatically retried up to _GsmModem.max_retries_
+        times.
+        """
 
         # keep looping until the command
         # succeeds or we hit the limit
@@ -612,17 +630,19 @@ class GsmModem(object):
 
 
     def query_list(self, cmd, prefix=None):
-        """Issues a single AT command to the modem, checks that the last line of
-           the response contains "OK", and returns a list containing the other
-           lines. An empty list is returned  if a command fails, so the output
-           of this method can always be assumed to be iterable.
+        """
+        Issue a single AT command to the modem, checks that the last
+        line of the response is "OK", and returns a list containing the
+        other lines. An empty list is returned if a command fails, so
+        the output of this method can always be assumed to be iterable.
 
-           The _prefix_ argument can optionally specify a string to filter the
-           output lines by. Matching lines are returned (sans prefix), and the
-           rest are dropped.
+        The 'prefix' argument can optionally specify a string to filter
+        the output lines by. Matching lines are returned (sans prefix),
+        and the rest are dropped.
 
-           Most AT commands return a single line, which is better handled by
-           GsmModem.query, which returns a single value."""
+        Most AT commands return a single line, which is better handled
+        by GsmModem.query, which returns a single value.
+        """
 
         # issue the command, which might return incoming
         # messages, but we'll leave them in the queue
@@ -651,40 +671,44 @@ class GsmModem(object):
 
 
     def query(self, cmd, prefix=None):
-        """Issues a single AT command to the modem, and returns the relevant
-           part of the response. This only works for commands that return a
-           single line followed by "OK", but conveniently, this covers almost
-           all AT commands that I've ever needed to use. For example:
+        """
+        Issue an AT command to the modem, and returns the relevant part
+        of the response. This only works for commands that return a
+        single line followed by "OK", but conveniently, this covers
+        almost all AT commands that I've ever needed to use. Example:
 
-              >>> modem.query("AT+CSQ")
-              "+CSQ: 20,99"
+        >>> modem.query("AT+CSQ")
+        "+CSQ: 20,99"
 
-           Optionally, the _prefix_ argument can specify a string to check for
-           at the beginning of the output, and strip it from the return value.
-           This is useful when you want to both verify that the output was as
-           expected, but ignore the prefix. For example:
+        Optionally, the _prefix_ argument can specify a string to check
+        for at the beginning of the output, and strip it from the return
+        value. This is useful when you want to both verify that the
+        output was as expected, but ignore the prefix. For example:
 
-              >>> modem.query("AT+CSQ", prefix="+CSQ:")
-              "20,99"
+        >>> modem.query("AT+CSQ", prefix="+CSQ:")
+        "20,99"
 
-           For all unexpected responses (errors, no output, or too much output),
-           returns None."""
+        For all unexpected responses (errors, no output, or too much
+        output), returns None.
+        """
 
         lines = self.query_list(cmd, prefix)
         return lines[0] if len(lines) == 1 else None
 
 
     def _csv_str(self, out):
-        """Many queries will return comma-separated output, which is not
-           formally specified (as far as I can tell), but strongly resembles
-           CSV. This method splits the output of self.query into a list. No
-           type casting is performed on the elements -- they're all strings,
-           as returned by the Python CSV module. For example:
+        """
+        Many queries will return comma-separated output, which is not
+        formally specified (far as I can tell), but strongly resembles
+        CSV. This method splits the output of self.query into a list. No
+        typecasting is performed on the elements -- they're all strings,
+        as returned by the Python CSV module. For example:
 
-              >>> modem.query("AT+COPS?", prefix="+COPS:", split_output=True)
-              ["0", "0", "MTN Rwanda", "2"]
+        >>> modem.query("AT+COPS?", prefix="+COPS:", split_output=True)
+        ["0", "0", "MTN Rwanda", "2"]
 
-           If the string couldn't be parsed, GsmParseError is raised."""
+        If the string couldn't be parsed, GsmParseError is raised.
+        """
 
         try:
             # parse the query output as if it were a single-line
@@ -702,11 +726,13 @@ class GsmModem(object):
 
 
     def send_sms(self, recipient, text):
-        """Sends an SMS to _recipient_ containing _text_. Some networks
-           will automatically chunk long messages into multiple parts,
-           and reassembled them upon delivery, but some will silently
-           drop them. At the moment, pyGSM does nothing to avoid this,
-           so try to keep _text_ under 160 characters."""
+        """
+        Send an SMS to 'recipient' containing 'text'. Some networks will
+        automatically split long messages into multiple parts, and join
+        them upon delivery -- but some will silently drop them. pyGSM
+        does nothing to avoid this (for now), so try to keep 'text'
+        under 160 characters.
+        """
 
         old_mode = None
         with self.modem_lock:
@@ -761,7 +787,7 @@ class GsmModem(object):
             # for all other errors...
             # (likely CMS or CME from device)
             except Exception, err:
-                
+
                 # whatever went wrong, break out of the
                 # message prompt. if this is missed, all
                 # subsequent writes will go into the message!
@@ -783,9 +809,11 @@ class GsmModem(object):
 
 
     def hardware(self):
-        """Returns a dict of containing information about the physical
-           modem. The contents of each value are entirely manufacturer
-           dependant, and vary wildly between devices."""
+        """
+        Return a dict of containing information about the modem. The
+        contents of each value are entirely manufacturer-dependant, and
+        can vary wildly between devices.
+        """
 
         return {
             "manufacturer": self.query("AT+CGMI"),
@@ -824,24 +852,29 @@ class GsmModem(object):
         property(
             _get_service_center,
             _set_service_center,
-            doc="""Gets or sets the service center address currently in use by
-                   the modem. Returns None if the modem does not support the
-                   AT+CSCA command.""")
+            doc=\
+        """
+        Get or set the service center address currently in use by the
+        modem. Returns None if the modem does not support the AT+CSCA
+        command.
+        """)
 
 
     @property
     def _known_networks(self):
-        """Returns a dict containing all networks known to this modem, keyed by
-           their numeric ID, valued by their alphanumeric operator name. This is
-           not especially useful externally, but is used internally to resolve
-           operator IDs to their alphanumeric name.
+        """
+        Return a dict containing all networks known to this modem, keyed
+        by their numeric ID, valued by their alphanumeric operator name.
+        This is not especially useful externally, but is used internally
+        to resolve operator IDs to their alphanumeric name.
 
-           Many devices can do this internally, via the AT+WOPN command, but the
-           Huawei dongle I'm on today happens not to support that, and I expect
-           many others are the same.
+        Many devices can do this internally, via the AT+WOPN command,
+        but the Huawei dongle I'm on today happens not to support that,
+        and I expect many others are the same.
 
-           This method will always return a dict (even if it's empty), and
-           caches its own output, since it can be quite slow and large."""
+        This method will always return a dict (even if it's empty), and
+        caches its own output, since it can be quite slow and large.
+        """
 
         # if the cache hasn't already been built, do so
         if not hasattr(self, "_known_networks_cache"):
@@ -884,7 +917,9 @@ class GsmModem(object):
 
     @property
     def network(self):
-        """Returns the name of the currently selected GSM network."""
+        """
+        Return the name of the currently selected GSM network.
+        """
 
         # fetch the current PLMN (Public Land Mobile Network)
         # setting, which should return something like:
@@ -935,9 +970,11 @@ class GsmModem(object):
 
 
     def signal_strength(self):
-        """Returns an integer between 1 and 99, representing the current
-           signal strength of the GSM network, False if we don't know, or
-           None if the modem can't report it."""
+        """
+        Return an integer between 1 and 99, representing the current
+        signal strength of the GSM network, False if we don't know, or
+        None if the modem can't report it.
+        """
 
         data = self.query("AT+CSQ")
         if data is not None:
@@ -960,9 +997,11 @@ class GsmModem(object):
 
 
     def wait_for_network(self):
-        """Blocks until the signal strength indicates that the
-           device is active on the GSM network. It's a good idea
-           to call this before trying to send or receive anything."""
+        """
+        Block until the signal strength indicates that the device is
+        active on the GSM network. It's a good idea to call this before
+        trying to send or receive anything.
+        """
 
         while True:
             csq = self.signal_strength()
@@ -971,11 +1010,12 @@ class GsmModem(object):
 
 
     def ping(self):
-        """Sends the "AT" command to the device, and returns true
-           if it is acknowledged. Since incoming notifications and
-           messages are intercepted automatically, this is a good
-           way to poll for new messages without using a worker
-           thread like RubyGSM."""
+        """
+        Send the "AT" command to the device, and return true if it is
+        acknowledged. Since incoming notifications and messages are
+        intercepted automatically, this is a good way to poll for new
+        messages without using a worker thread like RubyGSM.
+        """
 
         try:
             self.command("AT")
@@ -986,7 +1026,11 @@ class GsmModem(object):
 
 
     def _strip_ok(self,lines):
-        """Strip 'OK' from end of command response"""
+        """
+        Strip "OK" from the end of a command response. But DON'T USE
+        THIS. Parse the response properly.
+        """
+
         if lines is not None and len(lines)>0 and \
                 lines[-1]=='OK':
             lines=lines[:-1] # strip last entry
@@ -994,8 +1038,10 @@ class GsmModem(object):
 
 
     def _fetch_stored_messages(self):
-        """Fetch stored messages with CMGL and add to incoming queue
-           Return number fetched"""
+        """
+        Fetch stored unread messages, and add them to incoming queue.
+        Return number fetched.
+        """
 
         lines = self._strip_ok(self.command('AT+CMGL="%s"' % CMGL_STATUS))
         # loop through all the lines attempting to match CMGL lines (the header)
@@ -1040,12 +1086,14 @@ class GsmModem(object):
 
 
     def next_message(self, ping=True, fetch=True):
-        """Returns the next waiting IncomingMessage object, or None if the
-           queue is empty. The optional _ping_ and _fetch_ parameters control
-           whether the modem is pinged (to allow new messages to be delivered
-           instantly, on those modems which support it) and queried for unread
-           messages in storage, which can both be disabled in case you're
-           already polling in a separate thread."""
+        """
+        Returns the next waiting IncomingMessage object, or None if the
+        queue is empty. The optional 'ping' and 'fetch' args control
+        whether the modem is pinged (to allow new messages to be
+        delivered instantly, on those modems which support it) and
+        queried for unread messages in storage, which can both be
+        disabled in case you're already polling in a separate thread.
+        """
 
         # optionally ping the modem, to give it a
         # chance to deliver any waiting messages
