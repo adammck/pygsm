@@ -8,7 +8,7 @@ import pygsm
 from mock.device import MockDevice, MockSenderDevice
 
 
-class TestIncomingMessage(unittest.TestCase):
+class TestGsmModem(unittest.TestCase):
 
     def testWritesNothingDuringInit(self):
         """Nothing is written to the modem during __init__"""
@@ -16,6 +16,42 @@ class TestIncomingMessage(unittest.TestCase):
         device = MockDevice()
         gsm = pygsm.GsmModem(device=device)
         self.assertEqual(device.buf_write, [])
+
+
+    def testKnownOperatorkName(self):
+        """Long operator names are returned as-is."""
+
+        class MockCopsDevice(MockDevice):
+            def process(self, cmd):
+
+                # return a valid +COPS response for AT+COPS?, but error
+                # for other commands (except built-in MockDevice stuff)
+                if cmd == "AT+COPS?":
+                    return self._respond('+COPS: 0,0,"MOCK-NETWORK",0')
+
+                return False
+
+        device = MockCopsDevice()
+        gsm = pygsm.GsmModem(device=device)
+        self.assertEqual(gsm.network, "MOCK-NETWORK")
+
+
+    def testUnknownOperatorName(self):
+        """Unknown or missing operator names return a status string."""
+
+        class MockCopsDevice(MockDevice):
+            def process(self, cmd):
+
+                # return a valid +COPS response for AT+COPS?, but error
+                # for other commands (except built-in MockDevice stuff)
+                if cmd == "AT+COPS?":
+                    return self._respond('+COPS: 0')
+
+                return False
+
+        device = MockCopsDevice()
+        gsm = pygsm.GsmModem(device=device)
+        self.assertEqual(gsm.network, "(Automatic)")
 
 
     def testSendSms(self):

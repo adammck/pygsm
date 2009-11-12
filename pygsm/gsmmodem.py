@@ -875,6 +875,13 @@ class GsmModem(object):
         return self._known_networks_cache
 
 
+    PLMN_MODES = {
+        "0": "(Automatic)",
+        "1": "(Manual)",
+        "2": "(Deregistered)",
+        "3": "(Unreadable)"
+    }
+
     @property
     def network(self):
         """Returns the name of the currently selected GSM network."""
@@ -903,10 +910,15 @@ class GsmModem(object):
             # parse the csv-style output
             fields = self._csv_str(data)
 
+            # if the operator fields weren't returned (ie, "+COPS: 0"),
+            # just return a rough description of what's going on
+            if len(fields) == 1:
+                return self.PLMN_MODES[fields[0]]
+
             # if the <oper> was in long or short alphanumerics,
             # (according to <format>), return it as-is. this
             # happens when the network is unknown to the modem
-            if fields[1] in ["0", "1"]:
+            elif fields[1] in ["0", "1"]:
                 return fields[2]
 
             # if the <oper> was numeric, we're going to

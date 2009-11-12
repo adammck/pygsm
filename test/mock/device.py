@@ -95,21 +95,6 @@ class MockDevice(object):
 
         self._debug("CMD: %r" % (cmd))
 
-        def _respond(out):
-            """Given the output from a command-handling function,
-               injects a status line into the read buffer, to avoid
-               repeating it in every handler."""
-            
-            # boolean values result in OK or ERROR
-            # being injected into the read buffer
-            if   out == True:  return self._ok()
-            elif out == False: return self._error()
-
-            # for any other return value, leave the
-            # read buffer alone (we'll assume that
-            # the method has injected its own output)
-            else: return None
-
         # we can probably ignore whitespace,
         # even though a modem never would
         cmd = cmd.strip()
@@ -132,13 +117,26 @@ class MockDevice(object):
             # read buffer depending on the True/False output
             if hasattr(self, method):
                 out = getattr(self, method)(val)
-                return _respond(out)
+                return self._respond(out)
+
+        # if this command looks like an AT+SOMETHING? string, check for
+        # an at_something_query method to handle it, inject the output
+        # into the read buffer, and respond with OK (most of the time)
+        # or ERROR (if the method returns None or False)
+        m = re.match(r"^AT\+([A-Z]+)\?$", cmd)
+        if m is not None:
+            method = "at_%s_query" %\
+                m.group(0).lower()
+
+            if hasattr(self, method):
+                out = getattr(self, method)()
+                return self._respond(out)
 
         # attempt to hand off this
         # command to the subclass
         if hasattr(self, "process"):
             out = self.process(cmd)
-            return _respond(out)
+            return self._respond(out)
 
         # this modem has no "process" method,
         # or it was called and failed. either
@@ -161,6 +159,35 @@ class MockDevice(object):
         else:
             self.mode = None
             return False
+
+
+
+
+    def _respond(self, out):
+        """
+        Inject the usual output from an AT command handler (at_*) into
+        the read buffer, to save repeating it in every single handler.
+
+        When 'out' is a str or unicode, it is injected verbatim,
+        followed by OK. If it is a boolean, just OK (True) or ERROR
+        (False) are injected. All other types are ignored.
+        """
+
+        # string responses are injected verbatim, followed by OK
+        # (i've never seen an ERROR preceeded by output.)
+        if isinstance(out, basestring):
+            self._output(out)
+            return self._ok()
+
+        # boolean values result in OK or ERROR
+        # being injected into the read buffer
+        elif out == True:  return self._ok()
+        elif out == False: return self._error()
+
+        # for any other return value, leave the
+        # read buffer alone (we'll assume that
+        # the method has injected its own output)
+        else: return None
 
 
     def _output(self, str, delimiters=True):
