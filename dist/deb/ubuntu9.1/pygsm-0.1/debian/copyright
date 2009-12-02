@@ -1,0 +1,24 @@
+This package was debianized
+by Adam Mckaig <adam.mckaig@gmail.com>
+on Fri, 13 Nov 2009 17:12:44 +0000.
+
+It was downloaded from http://github.com/adammck/pygsm/tarball/0.1
+
+Copyright:
+
+    2009 UNICEF and individual contributors.
+
+License:
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted under the terms of the BSD License.
+
+On Debian systems, the complete text of the BSD License can be
+found in `/usr/share/common-licenses/BSD'.
+
+The Debian packaging is:
+
+    Copyright (C) 2009 Adam Mckaig <adam.mckaig@gmail.com>
+
+and is licensed under the GPL version 3,
+see `/usr/share/common-licenses/GPL-3'.

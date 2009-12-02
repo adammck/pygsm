@@ -1,0 +1,9 @@
+# Automatically added by dh_pycentral
+rm -f /var/lib/pycentral/pygsm.pkgremove
+if which pycentral >/dev/null 2>&1; then
+	pycentral pkginstall pygsm
+	if grep -qs '^pygsm$' /var/lib/pycentral/delayed-pkgs; then
+		sed -i '/^pygsm$/d' /var/lib/pycentral/delayed-pkgs
+	fi
+fi
+# End automatically added section
