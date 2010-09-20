@@ -112,18 +112,18 @@ class GsmModem(object):
         "error":   1 }
 
 
-    def _log(self, str, type="debug"):
+    def _log(self, msg_str, event_type="debug"):
         """
         Proxy a log message to this Modem's logger, if one has been set.
         This is useful for applications embedding pyGSM that wish to
         show or log what's going on inside.
 
         The 'logger' should be a function with three arguments:
-            modem:   a reference to this GsmModem instance
-            message: the log message (a unicode string)
-            type:    a string contaning one of the keys
-                     of GsmModem.LOG_LEVELS, indicating
-                     the importance of this message.
+            modem:      a reference to this GsmModem instance
+            msg_str:    the log message (a unicode string)
+            event_type: a string contaning one of the keys
+                        of GsmModem.LOG_LEVELS, indicating
+                        the importance of this message.
 
         GsmModem.__init__ accepts an optional 'logger' kwarg, and a
         minimal (dump to STDOUT) logger is at GsmModem.debug_logger:
@@ -132,12 +132,12 @@ class GsmModem(object):
         """
 
         if hasattr(self, "logger"):
-            self.logger(self, str, type)
+            self.logger(self, msg_str, event_type)
 
 
     @classmethod
-    def debug_logger(cls, modem, message, type):
-        print "%8s %s" % (type, message)
+    def debug_logger(cls, modem, msg_str, event_type):
+        print "%8s %s" % (event_type, msg_str)
 
 
     def connect(self, reconnect=False):
@@ -259,13 +259,13 @@ class GsmModem(object):
         self.boot(reboot=True)
 
 
-    def _write(self, str):
+    def _write(self, str_):
         """Write a string to the modem."""
 
-        self._log(repr(str), "write")
+        self._log(repr(str_), "write")
 
         try:
-            self.device.write(str)
+            self.device.write(str_)
 
         # if the device couldn't be written to,
         # wrap the error in something that can
