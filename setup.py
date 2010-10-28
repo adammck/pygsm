@@ -5,7 +5,6 @@
 
 from setuptools import setup
 
-
 setup(
     name="pyGSM",
     version="0.1",
@@ -16,6 +15,7 @@ setup(
 
     maintainer="RapidSMS development community",
     maintainer_email="rapidsms@googlegroups.com",
+    install_requires=["pyserial","pytz"], 
 
     description="Python interface to GSM modems",
     url="http://github.com/adammck/pygsm",
