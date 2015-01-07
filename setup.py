@@ -3,7 +3,10 @@
 # see LICENSE file (it's BSD)
 
 
-from setuptools import setup
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
 
 setup(
     name="pyGSM",
@@ -15,9 +18,10 @@ setup(
 
     maintainer="RapidSMS development community",
     maintainer_email="rapidsms@googlegroups.com",
-    install_requires=["pyserial","pytz"], 
+    install_requires=["pyserial","pytz"],
 
     description="Python interface to GSM modems",
     url="http://github.com/adammck/pygsm",
-    packages=["pygsm", "pygsm.message"]
+    packages=["pygsm", "pygsm.message"],
+    scripts=['tools/pygsmassia.py']
 )

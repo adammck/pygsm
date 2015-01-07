@@ -2,3 +2,5 @@
 .#*
 *.pyc
 *~
+build
+pyGSM.egg-info
