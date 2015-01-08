@@ -854,8 +854,17 @@ class GsmModem(object):
             "manufacturer": self.query("AT+CGMI"),
             "model":        self.query("AT+CGMM"),
             "revision":     self.query("AT+CGMR"),
-            "serial":       self.query("AT+CGSN") }
+            "serial":       self.query("AT+CGSN"),
+            'IMEI':         self.query("AT+GSN") }
 
+    #----------------------------------------------------------------------
+    @property
+    def sim(self):
+        """return sim card info"""
+        return {
+            'ICCID': self.query('AT+CXXCID', prefix='+CXXCID'),
+            'IMSI' : self.query('AT+CIMI'),
+        }
 
     def _get_service_center(self):
 

@@ -31,9 +31,11 @@ def cmd():
 
     subparsers = parser.add_subparsers(title='mode', dest='mode', help='sms op mode')
 
-    parser_list = subparsers.add_parser('read', help='read new sms')
+    parser_info = subparsers.add_parser('info', help='print device info')
 
-    parser_sent = subparsers.add_parser('sent', help='read new sms')
+    parser_read = subparsers.add_parser('read', help='read new sms')
+
+    parser_sent = subparsers.add_parser('sent', help='sent one sms')
     parser_sent.add_argument('-N', '--number', action='store', type=str, required=True, help="dest phone number")
     parser_sent.add_argument('-T', '--text', action='store', type=str, required=False, help="message text")
 
@@ -49,13 +51,20 @@ def cmd():
     return args
 
 #----------------------------------------------------------------------
-def print_info(network, hardware):
+def print_info(gsm):
     """"""
-    print('network: %s' % network)
     print('hardware info:')
+    hardware = gsm.hardware
     for k in hardware:
         print('  %s:\t%s' % (k, hardware[k]))
 
+    print('SIM card info:')
+    sim = gsm.sim
+    for k in sim:
+        print('  %s:\t%s' % (k, sim[k]))
+
+    network = gsm.network
+    print('network: %s' % network)
     return
 
 
@@ -67,9 +76,10 @@ if __name__ == '__main__':
     else:
         gsm = GsmModem(port=args.port).boot()
 
-    print_info(gsm.network, gsm.hardware)
+    if args.mode == 'info':
+        print_info(gsm)
 
-    if args.mode == 'read':
+    elif args.mode == 'read':
         print('reading, please input CTRL+C quit...')
         while True:
             msg = gsm.next_message()
