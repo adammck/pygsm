@@ -15,10 +15,6 @@ import threading
 # debian: apt-get install pyserial
 import serial
 
-# Constants
-CMGL_STATUS="REC UNREAD"
-CMGL_MATCHER=re.compile(r'^\+CMGL: (\d+),"(.+?)","(.+?)",.*?,"(.+?)".*?$')
-
 
 class GsmModem(object):
     """
@@ -46,6 +42,23 @@ class GsmModem(object):
     http://github.com/adammck/pygsm/issues
     """
 
+    # Constants
+    STATUS_RECEIVED_UNREAD = 0
+    STATUS_RECEIVED_READ = 1
+    STATUS_STORED_UNSENT = 2
+    STATUS_STORED_SENT = 3
+    STATUS_ALL = 4
+
+    TEXT_MODE_STATUS_MAP = {
+        STATUS_RECEIVED_UNREAD: 'REC UNREAD',
+        STATUS_RECEIVED_READ: 'REC READ',
+        STATUS_STORED_UNSENT: 'STO UNSENT',
+        STATUS_STORED_SENT: 'STO SENT',
+        STATUS_ALL: 'ALL'
+    }
+
+    CMGL_MATCHER_RECV = re.compile(r'^\+CMGL: (\d+),"(.+?)","(.+?)",.*?,"(.+?)".*?$')
+    CMGL_MATCHER_SENT = re.compile(r'^\+CMGL: (\d+),"(.+?)".*?$')
 
     # override these after init, and
     # before boot. they're not sanity
@@ -239,6 +252,7 @@ class GsmModem(object):
         self.command("AT+CMEE=1", raise_errors=False) # useful error messages
         self.command("AT+WIND=0", raise_errors=False) # disable notifications
         self.command("AT+CMGF=1"                    ) # switch to TEXT mode
+        self.command('AT+CSCS="GSM"'                ) # always use GSM character set
 
         return self
         # enable new message notification. (most
@@ -513,9 +527,9 @@ class GsmModem(object):
         # interested in (almost all of them!)
         return output_lines
 
-
-    def _add_incoming(self, timestamp, sender, text):
-
+    #----------------------------------------------------------------------
+    def _parse_incoming_text(self, text):
+        """"""
         # since neither message notifications nor messages
         # fetched from storage give any indication of their
         # encoding, we're going to have to guess. if the
@@ -540,6 +554,27 @@ class GsmModem(object):
         # but wasn't. who sends a message like that?!
         except:
             pass
+
+        return text
+
+    #----------------------------------------------------------------------
+    def _parse_leaving_text(self, text):
+        """convert unicode(utf-8) string to utf-16 byte stream"""
+        try:
+            text = text.encode("utf-16be").encode("hex").upper()
+
+            # insert a bom if there isn't one
+            bom = text[:4].lower()
+            if bom != "fffe" and bom != "feff":
+                text = "feff" + text
+
+        except:
+            pass
+
+        return text
+
+    def _add_incoming(self, timestamp, sender, text):
+        text = self._parse_incoming_text(text)
 
         # create and store the IncomingMessage object
         self._log("Adding incoming message")
@@ -740,11 +775,11 @@ class GsmModem(object):
                 try:
                     # cast the text to a string, to check that
                     # it doesn't contain non-ascii characters
-                    try:
+                    if type(text) == str:
                         text = str(text)
 
                     # uh-oh. unicode ahoy
-                    except UnicodeEncodeError:
+                    else:
 
                         # fetch and store the current mode (so we can
                         # restore it later), and override it with UCS2
@@ -756,9 +791,9 @@ class GsmModem(object):
 
                             # enable hex mode, and set the encoding
                             # to UCS2 for the full character set
-                            self.command('AT+CSCS="HEX"')
+                            #self.command('AT+CSCS="UCS2"')
                             self.command("AT+CSMP=%s" % ",".join(mode))
-                            text = text.encode("utf-16").encode("hex")
+                            text = self._parse_leaving_text(text)
 
                     # initiate the sms, and give the device a second
                     # to raise an error. unfortunately, we can't just
@@ -807,7 +842,7 @@ class GsmModem(object):
                     self.command("AT+CSMP=%s" % ",".join(old_mode))
                     self.command('AT+CSCS="GSM"')
 
-
+    @property
     def hardware(self):
         """
         Return a dict of containing information about the modem. The
@@ -819,8 +854,17 @@ class GsmModem(object):
             "manufacturer": self.query("AT+CGMI"),
             "model":        self.query("AT+CGMM"),
             "revision":     self.query("AT+CGMR"),
-            "serial":       self.query("AT+CGSN") }
+            "serial":       self.query("AT+CGSN"),
+            'IMEI':         self.query("AT+GSN") }
 
+    #----------------------------------------------------------------------
+    @property
+    def sim(self):
+        """return sim card info"""
+        return {
+            'ICCID': self.query('AT+CXXCID', prefix='+CXXCID'),
+            'IMSI' : self.query('AT+CIMI'),
+        }
 
     def _get_service_center(self):
 
@@ -1036,22 +1080,26 @@ class GsmModem(object):
             lines=lines[:-1] # strip last entry
         return lines
 
-
-    def _fetch_stored_messages(self):
+    def _fetch_stored_messages(self, cmgl_status=STATUS_RECEIVED_UNREAD):
         """
         Fetch stored unread messages, and add them to incoming queue.
         Return number fetched.
         """
 
-        lines = self._strip_ok(self.command('AT+CMGL="%s"' % CMGL_STATUS))
+        # choice matcher
+        if cmgl_status == self.STATUS_RECEIVED_UNREAD or cmgl_status == self.STATUS_RECEIVED_READ:
+            matcher = self.CMGL_MATCHER_RECV
+        else:
+            matcher = self.CMGL_MATCHER_SENT
+
+        lines = self._strip_ok(self.command('AT+CMGL="%s"' % self.TEXT_MODE_STATUS_MAP[cmgl_status]))
         # loop through all the lines attempting to match CMGL lines (the header)
         # and then match NOT CMGL lines (the content)
         # need to seed the loop first
+        message_list = []
         num_found=0
-        if len(lines)>0:
-            m=CMGL_MATCHER.match(lines[0])
-
         while len(lines)>0:
+            m = matcher.match(lines[0])
             if m is None:
                 # couldn't match OR no text data following match
                 raise(errors.GsmReadError())
@@ -1062,13 +1110,16 @@ class GsmModem(object):
             lines.pop(0)
 
             # now put the captures into independent vars
-            index, status, sender, timestamp = m.groups()
+            if cmgl_status == self.STATUS_RECEIVED_UNREAD or cmgl_status == self.STATUS_RECEIVED_READ:
+                index, status, sender, timestamp = m.groups()
+            else:
+                index, status = m.groups()
 
             # now loop through, popping content until we get
             # the next CMGL or out of lines
             msg_buf=StringIO.StringIO()
             while len(lines)>0:
-                m=CMGL_MATCHER.match(lines[0])
+                m = matcher.match(lines[0])
                 if m is not None:
                     # got another header, get out
                     break
@@ -1079,10 +1130,27 @@ class GsmModem(object):
             msg_text=msg_buf.getvalue().strip()
 
             # now create message
-            self._add_incoming(timestamp,sender,msg_text)
+            if cmgl_status == self.STATUS_RECEIVED_UNREAD:
+                self._add_incoming(timestamp,sender,msg_text)
+
+            if cmgl_status == self.STATUS_RECEIVED_READ:
+                message_list.append({
+                    'index': int(index),
+                    'status': status,
+                    'timestamp': timestamp,
+                    'sender': sender,
+                    'msg_text': self._parse_incoming_text(msg_text),
+                })
+            else:
+                message_list.append({
+                    'index': int(index),
+                    'status': status,
+                    'msg_text': self._parse_incoming_text(msg_text),
+                })
+
             num_found+=1
 
-        return num_found
+        return num_found, message_list
 
 
     def next_message(self, ping=True, fetch=True):
@@ -1114,7 +1182,23 @@ class GsmModem(object):
         # longest from the queue, and return it
         return self.incoming_queue.pop(0)
 
+    #----------------------------------------------------------------------
+    def get_message_list(self, cmgl_status=STATUS_RECEIVED_READ):
+        """"""
+        if cmgl_status == self.STATUS_RECEIVED_UNREAD:
+            self._fetch_stored_messages(cmgl_status)
 
+            return len(self.incoming_queue), self.incoming_queue
+        else:
+            return self._fetch_stored_messages(cmgl_status)
+
+    #----------------------------------------------------------------------
+    def delete_message(self, messages_id):
+        """"""
+        cmd = 'AT+CMGD=%d' % messages_id
+        self.query(cmd)
+
+        return
 
 
 if __name__ == "__main__":

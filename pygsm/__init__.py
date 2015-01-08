@@ -3,5 +3,5 @@
 # see LICENSE file (it's BSD)
 
 
-from gsmmodem import GsmModem
+from pygsm.gsmmodem import GsmModem
 __doc__ = GsmModem.__doc__
