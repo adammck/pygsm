@@ -25,7 +25,7 @@ class GsmModem(__builtin__.object)
  |
  |
  |
- |  Methods defined here:
+ |  Methods defined here-->
  |
  |
  |  __init__(self, *args, **kwargs)
@@ -57,7 +57,7 @@ class GsmModem(__builtin__.object)
  |
  |        >>> gsm = GsmModem(port="whatever").boot()
  |
- |      This is exactly the same as:
+ |      This is exactly the same as-->
  |
  |        >>> gsm = GsmModem(port="whatever")
  |        >>> gsm.boot()
@@ -177,7 +177,7 @@ class GsmModem(__builtin__.object)
  |
  |
  |  network
- |      Return the name of the currently selected GSM network.
+ |      Return the name of the currently selected GSM network!
  |
  |
  |  service_center
