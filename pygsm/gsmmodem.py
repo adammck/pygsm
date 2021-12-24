@@ -60,7 +60,7 @@ class GsmModem(object):
         """
         Create a GsmModem object. All of the arguments are passed along
         to serial.Serial.__init__ when GsmModem.connect is called. For
-        all of the possible configration options, see:
+        all of the possible configuration options, see:
 
         http://pyserial.wiki.sourceforge.net/pySerial#tocpySerial10
 
@@ -121,7 +121,7 @@ class GsmModem(object):
         The 'logger' should be a function with three arguments:
             modem:      a reference to this GsmModem instance
             msg_str:    the log message (a unicode string)
-            event_type: a string contaning one of the keys
+            event_type: a string containing one of the keys
                         of GsmModem.LOG_LEVELS, indicating
                         the importance of this message.
 
